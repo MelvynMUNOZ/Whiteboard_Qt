@@ -7,9 +7,10 @@
 class Client
 {
 public:
-    Client(QTcpSocket *socket);
+    Client(int id, QTcpSocket *socket);
     ~Client();
 
+    int getId() const;
     QTcpSocket *getSocket() const;
     QString getName() const;
     QColor getColor() const;
@@ -18,6 +19,7 @@ public:
     void setColor(const QColor &color);
 
 private:
+    int m_id;
     QTcpSocket *m_socket;
     QString m_name;
     QColor m_color;

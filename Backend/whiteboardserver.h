@@ -33,15 +33,17 @@ public:
     void start();
 
 private:
+    static int nextClientId;
+
     QTcpServer *m_tcp_server;
     QUdpSocket *m_udp_socket;
-
-    QMap<int, Client*> m_clients;
+    QHash<int, Client*> m_clients;
 
 private:
     QString getHostIpAddress();
-    void processTcpReadData(QTcpSocket *socket, const QByteArray &data);
-    void processUdpReadData(QTcpSocket *socket, const QByteArray &data);
+    int getClientIdBySocket(QTcpSocket *socket);
+    void processTcpFrame(Client *client, const QByteArray &data);
+    void processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data);
 
 signals:
 

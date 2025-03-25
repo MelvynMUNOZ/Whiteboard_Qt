@@ -4,10 +4,10 @@
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication a(argc, argv);
+    QCoreApplication app(argc, argv);
 
     WhiteboardServer server;
     server.start();
 
-    return a.exec();
+    return app.exec();
 }

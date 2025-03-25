@@ -1,15 +1,23 @@
 #include "client.h"
 
-Client::Client(QTcpSocket *socket)
-    : m_socket(socket)
+Client::Client(int id, QTcpSocket *socket)
+    : m_id(id), m_socket(socket)
 {
-    // TODO set unique color
+    // TODO: Set Unique color
 }
 
 Client::~Client()
 {
-    m_socket->close();
-    m_socket->deleteLater();
+    if (m_socket)
+    {
+        m_socket->close();
+        m_socket->deleteLater();
+    }
+}
+
+int Client::getId() const
+{
+    return m_id;
 }
 
 QTcpSocket *Client::getSocket() const

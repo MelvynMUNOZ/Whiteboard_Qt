@@ -2,6 +2,8 @@
 
 #include <QNetworkInterface>
 
+int WhiteboardServer::nextClientId = 1;
+
 WhiteboardServer::WhiteboardServer(QObject *parent)
     : QObject(parent),
     m_tcp_server(new QTcpServer(this)),
@@ -41,7 +43,8 @@ void WhiteboardServer::start()
 
 WhiteboardServer::~WhiteboardServer()
 {
-    // TODO: delete clients
+    qDeleteAll(m_clients);
+    m_clients.clear();
 
     m_tcp_server->close();
     m_tcp_server->deleteLater();
@@ -63,34 +66,59 @@ QString WhiteboardServer::getHostIpAddress()
     return QString();
 }
 
-void WhiteboardServer::processTcpReadData(QTcpSocket *socket, const QByteArray &data)
+int WhiteboardServer::getClientIdBySocket(QTcpSocket *socket)
 {
-    qDebug() << "(socket" << socket->socketDescriptor() << ") TCP Received:" << data[0];
-
-    // int type = (int)data[0];
-    // switch (type)
-    // {
-    //     case SEND_CLIENT_NAME:
-    //     {
-    //         QString client_name = QString::fromUtf8(data.sliced(1));
-    //         qInfo() << "Client name: " << client_name;
-    //         break;
-    //     }
-
-    // case REQ_CLIENTS_INFOS:
-    //     break;
-
-    // case DATA_CANVAS_CLIENT:
-    //     break;
-
-    // default:
-    //     break;
-    // }
+    for (auto it = m_clients.begin(); it != m_clients.end(); ++it)
+    {
+        if (it.value()->getSocket() == socket)
+        {
+            return it.key();
+        }
+    }
+    return -1;
 }
 
-void WhiteboardServer::processUdpReadData(QTcpSocket *socket, const QByteArray &data)
+void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 {
-    qDebug() << "(socket" << socket->socketDescriptor() << ") UCP Received:" << data;
+    auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
+    QString payload = QString::fromUtf8(data.sliced(1));
+
+    qDebug() << ">> TCP from" << client->getSocket()->peerAddress().toString() << "port" << client->getSocket()->peerPort() << "| Type:" << type << "| Payload Size:" << payload.size() << "| Payload:" << payload;
+
+    switch (type)
+    {
+    case SEND_CLIENT_NAME:
+        client->setName(payload);
+        break;
+
+    case REQ_CLIENTS_INFOS:
+        break;
+
+    case DATA_CANVAS_CLIENT:
+        break;
+
+    default:
+        //qWarning() << "Unknown TCP message type received: " << type;
+        break;
+    }
+}
+
+void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
+{
+    auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
+    QString payload = QString::fromUtf8(data.sliced(1));
+
+    qDebug() << ">> UDP from" << sender.toString() << "port" << sender_port << "| Type:" << type << "| Payload Size:" << payload.size() << "| Payload:" << payload;
+
+    switch (type)
+    {
+    case DATA_CANVAS_CLIENT:
+        break;
+
+    default:
+        //qWarning() << "Unknown UDP message type received: " << type;
+        break;
+    }
 }
 
 void WhiteboardServer::onTcpNewConnection()
@@ -101,19 +129,31 @@ void WhiteboardServer::onTcpNewConnection()
         return;
     }
 
+    int client_id = nextClientId++;
+    Client *client = new Client(client_id, client_socket);
+    m_clients[client_id] = client;
+
     connect(client_socket, &QTcpSocket::readyRead, this, &WhiteboardServer::onTcpReadyRead);
     connect(client_socket, &QTcpSocket::disconnected, this, &WhiteboardServer::onTcpClientDisconnected);
 
-    /* Socket descriptor is unique so used as ID */
-    int client_id = client_socket->socketDescriptor();
-    m_clients[client_id] = new Client(client_socket);
 
-    qInfo() << "Client connected, from" << client_socket->localAddress().toString() << "(socket" << client_id <<")";
+    qInfo() << "Client (id" << client_id << ") connected from" << client_socket->peerAddress().toString() << "port" << client_socket->peerPort();
 }
 
 void WhiteboardServer::onTcpClientDisconnected()
 {
-    qInfo() << "Client disconnected !";
+    QTcpSocket *client_socket = qobject_cast<QTcpSocket *>(sender());
+    if (!client_socket)
+    {
+        return;
+    }
+
+    int client_id = getClientIdBySocket(client_socket);
+    if (client_id != -1)
+    {
+        qInfo() << "Client (id" << client_id << ") disconnected";
+        delete m_clients.take(client_id);
+    }
 }
 
 void WhiteboardServer::onTcpReadyRead()
@@ -124,17 +164,36 @@ void WhiteboardServer::onTcpReadyRead()
         return;
     }
 
+    int client_id = getClientIdBySocket(client_socket);
+    if (client_id == -1)
+    {
+        return;
+    }
+
     while (client_socket->canReadLine())
     {
         QByteArray data = client_socket->readAll();
         if (!data.isEmpty())
         {
-            processTcpReadData(client_socket, data);
+            Client *client = m_clients[client_id];
+            processTcpFrame(client, data);
         }
     }
 }
 
 void WhiteboardServer::onUdpReadyRead()
 {
-    // TODO
+    while (m_udp_socket->hasPendingDatagrams())
+    {
+        QByteArray buffer;
+        buffer.resize(m_udp_socket->pendingDatagramSize());
+
+        QHostAddress sender;
+        quint16 senderPort;
+
+        if (m_udp_socket->readDatagram(buffer.data(), buffer.size(), &sender, &senderPort) > 0)
+        {
+            processUdpFrame(sender, senderPort, buffer);
+        }
+    }
 }
