@@ -8,8 +8,8 @@ MainWindow::MainWindow(QWidget *parent)
     , Whiteboard(new whiteboard(this))
 {
     ui->setupUi(this);
-    //setCentralWidget(Connexion);
-    setCentralWidget(Whiteboard);
+    setCentralWidget(Connexion);
+    //setCentralWidget(Whiteboard);
 }
 
 MainWindow::~MainWindow()

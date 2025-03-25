@@ -2,6 +2,8 @@
 #define WHITEBOARD_H
 
 #include <QApplication>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QWidget>
 #include <QLabel>
 #include <QListWidget>
@@ -10,6 +12,7 @@
 #include <QMouseEvent>
 #include <QImage>
 #include <QDesktopServices>
+#include <QPushButton>
 
 class whiteboard : public QWidget
 {
@@ -26,7 +29,14 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+    QVBoxLayout *vBoxGeneral;
     QLabel *labelTitle;
+
+    QHBoxLayout *hBoxChoices;
+    QPushButton *pushButtonPen;
+    QPushButton *pushButtonRubber;
+
+    QHBoxLayout *hBoxWhiteboard;
     QListWidget *listPseudo;
 
     QPainter *painterWhiteboard;
@@ -34,6 +44,8 @@ private:
     QPoint pointBegin;
     QPoint pointEnd;
     bool enable;
+
+    bool writer; //pour faire la différence entre le crayon et la gomme
 
 signals:
 };
