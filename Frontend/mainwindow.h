@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "connexion.h"
+#include "whiteboard.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -21,6 +22,7 @@ public:
 private:
     Ui::MainWindow *ui;
     connexion *Connexion;
+    whiteboard *Whiteboard;
 
 };
 #endif // MAINWINDOW_H

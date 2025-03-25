@@ -3,11 +3,11 @@
 connexion::connexion(QWidget *parent)
     : QWidget{parent}
 {
-    createMainLayout();
+    createConnexionLayout();
 }
 
 
-void connexion::createMainLayout(){
+void connexion::createConnexionLayout(){
     vBoxGeneral = new QVBoxLayout(this);
     labelTitle = new QLabel("Connexion to Canva", this);
     labelPseudo = new QLabel("Pseudo : ", this);
