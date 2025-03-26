@@ -11,7 +11,8 @@ public:
     ~Client();
 
     int getId() const;
-    QTcpSocket *getSocket() const;
+    QTcpSocket *getTcpSocket() const;
+    quint16 getUdpPort() const;
     QString getName() const;
     QColor getColor() const;
 
@@ -20,7 +21,8 @@ public:
 
 private:
     int m_id;
-    QTcpSocket *m_socket;
+    QTcpSocket *m_tcp_socket;
+    quint16 m_udp_port;
     QString m_name;
     QColor m_color;
     // TODO: Add Canvas info form user ???

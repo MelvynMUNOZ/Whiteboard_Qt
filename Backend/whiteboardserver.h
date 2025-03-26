@@ -18,10 +18,12 @@ class WhiteboardServer : public QObject
 
 public:
     enum MessageType {
+        ERROR = -1,
         NONE,
-        SEND_CLIENT_NAME,
-        REQ_CLIENTS_INFOS,
-        UPDATE_CLIENTS_INFOS,
+        REGISTER_CLIENT,
+        ACK_REGISTER_CLIENT,
+        REQUEST_ALL_CLIENTS_INFOS,
+        SEND_ALL_CLIENTS_INFOS,
         DATA_CANVAS_CLIENT,
         DATA_CANVAS_SYNC,
     };

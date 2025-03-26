@@ -70,7 +70,7 @@ int WhiteboardServer::getClientIdBySocket(QTcpSocket *socket)
 {
     for (auto it = m_clients.begin(); it != m_clients.end(); ++it)
     {
-        if (it.value()->getSocket() == socket)
+        if (it.value()->getTcpSocket() == socket)
         {
             return it.key();
         }
@@ -83,15 +83,15 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
     QString payload = QString::fromUtf8(data.sliced(1));
 
-    qDebug() << ">> TCP from" << client->getSocket()->peerAddress().toString() << "port" << client->getSocket()->peerPort() << "| Type:" << type << "| Payload Size:" << payload.size() << "| Payload:" << payload;
+    qDebug() << ">> TCP from" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort() << "| Type:" << type << "| Payload Size:" << payload.size() << "| Payload:" << payload;
 
     switch (type)
     {
-    case SEND_CLIENT_NAME:
+    case REGISTER_CLIENT:
         client->setName(payload);
         break;
 
-    case REQ_CLIENTS_INFOS:
+    case REQUEST_ALL_CLIENTS_INFOS:
         break;
 
     case DATA_CANVAS_CLIENT:
@@ -135,7 +135,6 @@ void WhiteboardServer::onTcpNewConnection()
 
     connect(client_socket, &QTcpSocket::readyRead, this, &WhiteboardServer::onTcpReadyRead);
     connect(client_socket, &QTcpSocket::disconnected, this, &WhiteboardServer::onTcpClientDisconnected);
-
 
     qInfo() << "Client (id" << client_id << ") connected from" << client_socket->peerAddress().toString() << "port" << client_socket->peerPort();
 }

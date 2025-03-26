@@ -1,17 +1,17 @@
 #include "client.h"
 
 Client::Client(int id, QTcpSocket *socket)
-    : m_id(id), m_socket(socket)
+    : m_id(id), m_tcp_socket(socket)
 {
     // TODO: Set Unique color
 }
 
 Client::~Client()
 {
-    if (m_socket)
+    if (m_tcp_socket)
     {
-        m_socket->close();
-        m_socket->deleteLater();
+        m_tcp_socket->close();
+        m_tcp_socket->deleteLater();
     }
 }
 
@@ -20,9 +20,14 @@ int Client::getId() const
     return m_id;
 }
 
-QTcpSocket *Client::getSocket() const
+QTcpSocket *Client::getTcpSocket() const
 {
-    return m_socket;
+    return m_tcp_socket;
+}
+
+quint16 Client::getUdpPort() const
+{
+    return m_udp_port;
 }
 
 QString Client::getName() const
