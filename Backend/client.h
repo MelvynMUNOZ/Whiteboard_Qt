@@ -7,7 +7,7 @@
 class Client
 {
 public:
-    Client(int id, QTcpSocket *socket);
+    Client(int id, QTcpSocket *socket, QColor color);
     ~Client();
 
     int getId() const;
@@ -16,6 +16,7 @@ public:
     QString getName() const;
     QColor getColor() const;
 
+    void setUdpPort(const quint16 port);
     void setName(const QString &name);
     void setColor(const QColor &color);
 
@@ -25,7 +26,6 @@ private:
     quint16 m_udp_port;
     QString m_name;
     QColor m_color;
-    // TODO: Add Canvas info form user ???
 };
 
 #endif // CLIENT_H

@@ -3,11 +3,13 @@
 
 #include "client.h"
 
-#include <QMap>
+#include <QHash>
+#include <QList>
 #include <QObject>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QUdpSocket>
+#include <QColor>
 
 #define TCP_PORT (12345)
 #define UDP_PORT (TCP_PORT + 1)
@@ -22,8 +24,10 @@ public:
         NONE,
         REGISTER_CLIENT,
         ACK_REGISTER_CLIENT,
+        REGISTER_UDP_PORT,
+        ACK_REGISTER_UDP_PORT,
         REQUEST_ALL_CLIENTS_INFOS,
-        SEND_ALL_CLIENTS_INFOS,
+        SEND_CLIENTS_INFOS,
         DATA_CANVAS_CLIENT,
         DATA_CANVAS_SYNC,
     };
@@ -34,20 +38,30 @@ public:
 
     void start();
 
+protected:
+    void processTcpFrame(Client *client, const QByteArray &data);
+    void processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data);
+
+    void sendAckRegisterClient(Client *client);
+    void sendAckRegisterUdpPort(Client *client);
+
+
 private:
     static int nextClientId;
 
     QTcpServer *m_tcp_server;
     QUdpSocket *m_udp_socket;
     QHash<int, Client*> m_clients;
+    QList<QColor> m_used_colors;
 
 private:
     QString getHostIpAddress();
-    int getClientIdBySocket(QTcpSocket *socket);
-    void processTcpFrame(Client *client, const QByteArray &data);
-    void processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data);
+    int getClientIdByTcpSocket(QTcpSocket *socket);
 
-signals:
+    QColor generateUniqueColor();
+    void addColorToUsedList(const QColor &color);
+    bool isColorUsed(const QColor &color) const;
+    void removeUsedColor(const QColor &color);
 
 public slots:
     void onTcpNewConnection();

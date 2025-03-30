@@ -1,9 +1,8 @@
 #include "client.h"
 
-Client::Client(int id, QTcpSocket *socket)
-    : m_id(id), m_tcp_socket(socket)
+Client::Client(int id, QTcpSocket *socket, QColor color)
+    : m_id(id), m_tcp_socket(socket), m_color(color)
 {
-    // TODO: Set Unique color
 }
 
 Client::~Client()
@@ -38,6 +37,11 @@ QString Client::getName() const
 QColor Client::getColor() const
 {
     return m_color;
+}
+
+void Client::setUdpPort(const quint16 port)
+{
+    m_udp_port = port;
 }
 
 void Client::setName(const QString &name)
