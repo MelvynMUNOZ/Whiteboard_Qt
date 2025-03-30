@@ -61,7 +61,7 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
     int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
-    auto payload = QString::fromUtf8(data.sliced(5));
+    QByteArray payload = data.sliced(5);
 
     qDebug() << ">> TCP from" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
              << "| Type:" << type
@@ -71,11 +71,13 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
     switch (type)
     {
     case REGISTER_CLIENT:
-        client->setName(payload);
+        client->setName(QString::fromUtf8(payload));
         sendAckRegisterClient(client);
         break;
 
     case REGISTER_UDP_PORT:
+        client->setUdpPort(qFromBigEndian(payload.toUShort()));
+        sendAckRegisterUdpPort(client);
         // TODO: enregistre le port UDP utilisé par le client (pour les prochains envois) dans la classe client associé à l'id reçu: Besoin de verifier l'adresse IP qui doit matcher avec celle de la socket Tcp
         // Envoi d'une reponse TCP ACK_REGISTER_UDP_PORT avec comme données : id, port udp enregistré (quint16 en Big Endian)
         break;
@@ -268,7 +270,7 @@ void WhiteboardServer::onTcpReadyRead()
     while (client_socket->canReadLine())
     {
         QByteArray data = client_socket->readAll();
-        if (!data.isEmpty())
+        if (!data.isEmpty() && data.length() >= 5)
         {
             Client *client = m_clients[client_id];
             processTcpFrame(client, data);
@@ -288,7 +290,10 @@ void WhiteboardServer::onUdpReadyRead()
 
         if (m_udp_socket->readDatagram(buffer.data(), buffer.size(), &sender, &senderPort) > 0)
         {
-            processUdpFrame(sender, senderPort, buffer);
+            if (buffer.size() >= 5)
+            {
+                processUdpFrame(sender, senderPort, buffer);
+            }
         }
     }
 }
