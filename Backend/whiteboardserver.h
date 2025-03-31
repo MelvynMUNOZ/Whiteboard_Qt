@@ -14,6 +14,18 @@
 #define TCP_PORT (12345)
 #define UDP_PORT (TCP_PORT + 1)
 
+// TCP frame (Big Endian) :
+// 0    | 1  -  4 | 5  -  n
+// type | id      | payload
+
+#define TCP_FRAME_MIN_LEN (sizeof(quint8) + sizeof(quint32))
+
+// UDP frame (Big Endian) :
+// 0    | 1  -  4 | 5  -  n
+// type | id      | payload
+
+#define UDP_FRAME_MIN_LEN (sizeof(quint8) + sizeof(quint32))
+
 class WhiteboardServer : public QObject
 {
     Q_OBJECT
@@ -30,6 +42,7 @@ public:
         SEND_CLIENTS_INFOS,
         DATA_CANVAS_CLIENT,
         DATA_CANVAS_SYNC,
+        CLIENT_DISCONNECTED,
     };
 
 public:
@@ -45,6 +58,10 @@ protected:
     void sendAckRegisterClient(Client *client);
     void sendAckRegisterUdpPort(Client *client);
 
+    void broadcastClientsInfos();
+    void broadcastDataCanvasSync();
+    void broadcastClientDisconnected(Client *client);
+
 
 private:
     static int nextClientId;
@@ -56,7 +73,7 @@ private:
 
 private:
     QString getHostIpAddress();
-    int getClientIdByTcpSocket(QTcpSocket *socket);
+    Client *getClientByTcpSocket(QTcpSocket *socket);
 
     QColor generateUniqueColor();
     void addColorToUsedList(const QColor &color);

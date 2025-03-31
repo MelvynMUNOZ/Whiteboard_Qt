@@ -8,7 +8,8 @@ int WhiteboardServer::nextClientId = 1;
 
 WhiteboardServer::WhiteboardServer(QObject *parent)
     : QObject(parent), m_tcp_server(new QTcpServer(this)), m_udp_socket(new QUdpSocket(this))
-{}
+{
+}
 
 WhiteboardServer::~WhiteboardServer()
 {
@@ -28,8 +29,6 @@ void WhiteboardServer::start()
 
     /***** TCP *****/
 
-    connect(m_tcp_server, &QTcpServer::newConnection, this, &WhiteboardServer::onTcpNewConnection);
-
     if (m_tcp_server->listen(QHostAddress::Any, TCP_PORT))
     {
         qInfo() << "Started TCP server on port" << TCP_PORT;
@@ -39,9 +38,9 @@ void WhiteboardServer::start()
         qCritical() << "Failed to start TCP server on port" << TCP_PORT;
     }
 
-    /***** UDP *****/
+    connect(m_tcp_server, &QTcpServer::newConnection, this, &WhiteboardServer::onTcpNewConnection);
 
-    connect(m_udp_socket, &QUdpSocket::readyRead, this, &WhiteboardServer::onUdpReadyRead);
+    /***** UDP *****/
 
     if (m_udp_socket->bind(QHostAddress::Any, UDP_PORT, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
     {
@@ -51,22 +50,23 @@ void WhiteboardServer::start()
     {
         qCritical() << "Failed to start UDP socket on port" << UDP_PORT;
     }
+
+    connect(m_udp_socket, &QUdpSocket::readyRead, this, &WhiteboardServer::onUdpReadyRead);
 }
 
 void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 {
-    // TCP frame (Big Endian) :
-    // 0    | 1  -  4 | 5  -  n
-    // type | id      | payload
-
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
     int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
     QByteArray payload = data.sliced(5);
 
-    qDebug() << ">> TCP from" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+    qDebug() << ">>> TCP from" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
              << "| Type:" << type
              << "| Id:" << id
              << "| Payload:" << payload;
+
+    // qDebug() << ">> TCP from " << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+    //          << "|" << data.toHex(' ');
 
     switch (type)
     {
@@ -78,76 +78,129 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
     case REGISTER_UDP_PORT:
         client->setUdpPort(qFromBigEndian(payload.toUShort()));
         sendAckRegisterUdpPort(client);
-        // TODO: enregistre le port UDP utilisé par le client (pour les prochains envois) dans la classe client associé à l'id reçu: Besoin de verifier l'adresse IP qui doit matcher avec celle de la socket Tcp
-        // Envoi d'une reponse TCP ACK_REGISTER_UDP_PORT avec comme données : id, port udp enregistré (quint16 en Big Endian)
         break;
 
     case REQUEST_ALL_CLIENTS_INFOS:
-        // TODO: Envoi d'une réponse TCP SEND_CLIENTS_INFOS par client enregistré, avec comme données : id client, color (format #XXXXXX), nom
+        // TODO: Envoi d'une réponse TCP SEND_CLIENTS_INFOS par client enregistré, avec comme données : id client, color (hex), nom
+        // broadcastClientsInfos();
         break;
 
     default:
-        // qWarning() << "Unknown TCP message type received: " << type;
         break;
     }
 }
 
 void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
 {
-    // UDP frame (Big Endian) :
-    // 0    | 1  -  4 | 5  -  n
-    // type | id      | payload
-
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
     int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
-    auto payload = QString::fromUtf8(data.sliced(5));
+    auto payload = data.sliced(5);
 
-    qDebug() << ">> UDP from" << sender.toString() << "port" << sender_port
+    qDebug() << ">>> UDP from" << sender.toString() << "port" << sender_port
              << "| Type:" << type
              << "| Id:" << id
              << "| Payload:" << payload;
 
+    // qDebug() << ">> UDP from " << sender.toString() << "port" << sender_port
+    //          << "|" << data.toHex(' ');
+
     switch (type)
     {
     case DATA_CANVAS_CLIENT:
+        // TODO: Reception et enregistrement donnees Canvas, puis broadcast des nouvelles données a tous les clients
         break;
 
     default:
-        // qWarning() << "Unknown UDP message type received: " << type;
         break;
     }
 }
 
 void WhiteboardServer::sendAckRegisterClient(Client *client)
 {
-    QString colorHex = client->getColor().name(QColor::HexRgb);
+    if (!client)
+    {
+        return;
+    }
 
     QByteArray message;
-    message.append(static_cast<char>(ACK_REGISTER_CLIENT));  // Type du message
-    message.append(qToBigEndian(client->getId()));  // ID du client en Big Endian (4 bytes)
-    message.append(colorHex.toUtf8());  // Payload contenant la couleur en hex
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    stream << static_cast<quint8>(WhiteboardServer::ACK_REGISTER_UDP_PORT);  // Type du message
+    stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
+    message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client en hex
 
     client->getTcpSocket()->write(message);
+    client->getTcpSocket()->flush();
 
-    qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
-             << "| ACK_REGISTER_CLIENT"
-             << "| Id:" << client->getId()
-             << "| Color:" << colorHex;
+    // qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
+    //          << "| ACK_REGISTER_CLIENT"
+    //          << "| Id:" << client->getId()
+    //          << "| Color:" << colorHex;
+
+    qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+             << "|" << message.toHex(' ');
 }
 
 void WhiteboardServer::sendAckRegisterUdpPort(Client *client)
 {
+    if (!client)
+    {
+        return;
+    }
+
     QByteArray message;
-    message.append(static_cast<char>(WhiteboardServer::ACK_REGISTER_UDP_PORT));  // Type du message
-    message.append(qToBigEndian(client->getId()));  // ID du client en Big Endian (4 bytes)
-    message.append(qToBigEndian(client->getUdpPort()));  // Port UDP du client en Big Endian (2 bytes)
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    stream << static_cast<quint8>(WhiteboardServer::ACK_REGISTER_UDP_PORT);  // Type du message
+    stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
+    stream << static_cast<quint16>(client->getUdpPort());  // Port UDP du client (2 bytes)
 
     client->getTcpSocket()->write(message);
+    client->getTcpSocket()->flush();
 
-    qDebug() << "<<< UDP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
-             << "| ACK_REGISTER_CLIENT"
-             << "| Id:" << client->getId()
-             << "| UDP Port:" << client->getUdpPort();
+    // qDebug() << "<<< UDP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
+    //          << "| ACK_REGISTER_UDP_PORT"
+    //          << "| Id:" << client->getId()
+    //          << "| UDP Port:" << client->getUdpPort();
+
+    qDebug() << "<<< UDP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getUdpPort()
+             << "|" << message.toHex(' ');
+}
+
+void WhiteboardServer::broadcastClientDisconnected(Client *client)
+{
+    if (!client)
+    {
+        return;
+    }
+
+    QByteArray message;
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    stream << static_cast<quint8>(WhiteboardServer::CLIENT_DISCONNECTED); // Type du message
+    stream << static_cast<quint32>(client->getId());  // ID du client qui se déconnecte (4 bytes Big Endian)
+    message.append(client->getName().toUtf8());  // Nom du client
+
+    // Envoi à tous les clients sauf celui qui se deconnecte
+    for (const auto &otherClient : std::as_const(m_clients))
+    {
+        if (otherClient != client && otherClient->getTcpSocket())
+        {
+            otherClient->getTcpSocket()->write(message);
+            otherClient->getTcpSocket()->flush();
+
+            // qDebug() << "<<< UDP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
+            //          << "| CLIENT_DISCONNECTED"
+            //          << "| Id:" << client->getId()
+            //          << "| Name:" << client->getName();
+
+            qDebug() << "<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+                     << "|" << message.toHex(' ');
+        }
+    }
 }
 
 QString WhiteboardServer::getHostIpAddress()
@@ -163,16 +216,16 @@ QString WhiteboardServer::getHostIpAddress()
     return QString();
 }
 
-int WhiteboardServer::getClientIdByTcpSocket(QTcpSocket *socket)
+Client *WhiteboardServer::getClientByTcpSocket(QTcpSocket *socket)
 {
-    for (auto it = m_clients.begin(); it != m_clients.end(); ++it)
+    for (const auto &client : std::as_const(m_clients))
     {
-        if (it.value()->getTcpSocket() == socket)
+        if (client->getTcpSocket() == socket)
         {
-            return it.key();
+            return client;
         }
     }
-    return -1;
+    return nullptr;
 }
 
 QColor WhiteboardServer::generateUniqueColor()
@@ -215,11 +268,10 @@ void WhiteboardServer::onTcpNewConnection()
         return;
     }
 
-    /***** Create new client *****/
-
     int client_id = nextClientId++;
-    QColor client_color = Qt::black; // default color
-    do {
+    QColor client_color = Qt::black;
+    do
+    {
         client_color = generateUniqueColor();
     } while (isColorUsed(client_color));
     addColorToUsedList(client_color);
@@ -228,8 +280,7 @@ void WhiteboardServer::onTcpNewConnection()
     m_clients[client_id] = client;
 
     qInfo() << "Client connected from" << client_socket->peerAddress().toString() << "port" << client_socket->peerPort()
-            << "| Id:" << client_id
-            << "| Color:" << client_color.name();
+            << "| Id:" << client_id;
 
     connect(client_socket, &QTcpSocket::readyRead, this, &WhiteboardServer::onTcpReadyRead);
     connect(client_socket, &QTcpSocket::disconnected, this, &WhiteboardServer::onTcpClientDisconnected);
@@ -243,13 +294,15 @@ void WhiteboardServer::onTcpClientDisconnected()
         return;
     }
 
-    int client_id = getClientIdByTcpSocket(client_socket);
-    if (client_id != -1)
+    Client *client = getClientByTcpSocket(client_socket);
+    if (client)
     {
-        removeUsedColor(m_clients[client_id]->getColor());
-        delete m_clients.take(client_id);
+        qInfo() << "Client disconnected | Id:" << client->getId();
 
-        qInfo() << "Client disconnected | Id:" << client_id;
+        broadcastClientDisconnected(client);
+
+        removeUsedColor(m_clients[client->getId()]->getColor());
+        delete m_clients.take(client->getId());
     }
 }
 
@@ -261,8 +314,8 @@ void WhiteboardServer::onTcpReadyRead()
         return;
     }
 
-    int client_id = getClientIdByTcpSocket(client_socket);
-    if (client_id == -1)
+    Client *client = getClientByTcpSocket(client_socket);
+    if (!client)
     {
         return;
     }
@@ -270,9 +323,8 @@ void WhiteboardServer::onTcpReadyRead()
     while (client_socket->canReadLine())
     {
         QByteArray data = client_socket->readAll();
-        if (!data.isEmpty() && data.length() >= 5)
+        if (!data.isEmpty() && data.length() >= (qsizetype)TCP_FRAME_MIN_LEN)
         {
-            Client *client = m_clients[client_id];
             processTcpFrame(client, data);
         }
     }
@@ -290,7 +342,7 @@ void WhiteboardServer::onUdpReadyRead()
 
         if (m_udp_socket->readDatagram(buffer.data(), buffer.size(), &sender, &senderPort) > 0)
         {
-            if (buffer.size() >= 5)
+            if (buffer.size() >= (qsizetype)UDP_FRAME_MIN_LEN)
             {
                 processUdpFrame(sender, senderPort, buffer);
             }
