@@ -229,37 +229,31 @@ void WhiteboardServer::sendAllClientsInfos(Client *client)
 
     /***** Encodage et envoi du message *****/
 
-    QByteArray message;
-    QDataStream stream(&message, QIODevice::WriteOnly);
-    stream.setByteOrder(QDataStream::BigEndian);
-
     // Envoi toutes les infos de tous les clients enregistres
     for (const auto &other_client : std::as_const(m_clients))
     {
-        if (other_client != client)
-        {
-            stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
-            stream << static_cast<quint32>(client->getId()); // ID du client (4 bytes)
-            stream << static_cast<quint32>(other_client->getId()); // ID du client a envoyer (4 bytes)
-            message.append(other_client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
-            message.append(other_client->getName().toUtf8());  // Nom du client a envoyer
-            message.append('\n');
+        QByteArray message;
+        QDataStream stream(&message, QIODevice::WriteOnly);
+        stream.setByteOrder(QDataStream::BigEndian);
+        stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
+        stream << static_cast<quint32>(client->getId()); // ID du client (4 bytes)
+        stream << static_cast<quint32>(other_client->getId()); // ID du client a envoyer (4 bytes)
+        message.append(other_client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
+        message.append(other_client->getName().toUtf8());  // Nom du client a envoyer
+        message.append('\n');
 
-            client->getTcpSocket()->write(message);
-            client->getTcpSocket()->flush();
+        client->getTcpSocket()->write(message);
+        client->getTcpSocket()->flush();
 
-            qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-                     << "| CLIENT_INFOS"
-                     << "| Id:" << client->getId()
-                     << "| OId:" << other_client->getId()
-                     << "| Color:" << other_client->getColor().name(QColor::HexRgb)
-                     << "| Name:" << other_client->getName();
+        qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+                 << "| CLIENT_INFOS"
+                 << "| Id:" << client->getId()
+                 << "| OId:" << other_client->getId()
+                 << "| Color:" << other_client->getColor().name(QColor::HexRgb)
+                 << "| Name:" << other_client->getName();
 
-            // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-            //         << "|" << message.toHex(' ');
-        }
-
-        message.clear();
+        // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+        //         << "|" << message.toHex(' ');
     }
 }
 
@@ -327,22 +321,21 @@ void WhiteboardServer::broadcastClientConnected(Client *client)
 
     /***** Encodage et envoi du message *****/
 
-    QByteArray message;
-    QDataStream stream(&message, QIODevice::WriteOnly);
-    stream.setByteOrder(QDataStream::BigEndian);
-
-    // Envoi a tous les autres client qu'un client s'est connecte, sauf celui concerne
+    // Envoi a tous les autres client qu'un client s'est connecte
     for (const auto &other_client : std::as_const(m_clients))
     {
-        stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
-        stream << static_cast<quint32>(other_client->getId()); // ID du client (4 bytes)
-        stream << static_cast<quint32>(client->getId()); // ID du client qui s'est connecte (4 bytes)
-        message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client qui s'est connecte
-        message.append(client->getName().toUtf8());  // Nom du client qui s'est connecte
-        message.append('\n');
-
-        if (other_client != client && other_client->getTcpSocket())
+        if (other_client != client)
         {
+            QByteArray message;
+            QDataStream stream(&message, QIODevice::WriteOnly);
+            stream.setByteOrder(QDataStream::BigEndian);
+            stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
+            stream << static_cast<quint32>(other_client->getId()); // ID du client (4 bytes)
+            stream << static_cast<quint32>(client->getId()); // ID du client qui s'est connecte (4 bytes)
+            message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client qui s'est connecte
+            message.append(client->getName().toUtf8());  // Nom du client qui s'est connecte
+            message.append('\n');
+
             other_client->getTcpSocket()->write(message);
             other_client->getTcpSocket()->flush();
 
@@ -356,8 +349,6 @@ void WhiteboardServer::broadcastClientConnected(Client *client)
             // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
             //         << "|" << message.toHex(' ');
         }
-
-        message.clear();
     }
 }
 
@@ -392,8 +383,8 @@ void WhiteboardServer::broadcastClientDisconnected(Client *client)
                      << "| Id:" << client->getId()
                      << "| Name:" << client->getName();
 
-            // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-            //         << "|" << message.toHex(' ');
+            qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+                    << "|" << message.toHex(' ');
         }
     }
 }
@@ -523,7 +514,7 @@ void WhiteboardServer::onTcpReadyRead()
     // Lecture des trames TCP
     while (client_socket->canReadLine())
     {
-        QByteArray data = client_socket->readAll();
+        QByteArray data = client_socket->readLine();
         if (!data.isEmpty() && data.length() >= (qsizetype)TCP_FRAME_MIN_LEN)
         {
             processTcpFrame(client, data);

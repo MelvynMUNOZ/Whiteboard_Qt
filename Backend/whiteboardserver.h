@@ -46,7 +46,7 @@ public:
         CLIENT_INFOS,             ///< Information about a client.
         DATA_CANVAS_CLIENT,       ///< Canvas data sent by a client.
         DATA_CANVAS_SYNC,         ///< Synchronize canvas data with all clients.
-        CLIENT_DISCONNECTED       ///< Notification of client disconnection.
+        CLIENT_DISCONNECTED = 100 ///< Notification of client disconnection.
     };
 
 public:
