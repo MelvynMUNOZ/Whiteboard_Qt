@@ -3,21 +3,27 @@
 Interactive Whiteboard GUI and Server in Qt.
 
 
-## FRONTEND
+## FRONTEND
 
 GUI to login with a username to server, specifying the server IP address.
 
 Draw on the same canvas with other people.
 
 
-## BACKEND
+## BACKEND
 
 TCP Server on host machine, port 12345.
 
 UDP Socket on host machine, port 12346.
 
+To generate Backend Doxygen documentation, run the commands :
+```
+cd Backend
+doxygen Doxyfile
+```
 
-## INTERNAL COMMUNICATION PROTOCOL
+
+## INTERNAL COMMUNICATION PROTOCOL
 
 ```
 Big Endian
@@ -51,6 +57,6 @@ Big Endian
 ```
 
 
-## AUTHORS
+## AUTHORS
 
 Melvyn MUNOZ, Raphael CAUSSE
