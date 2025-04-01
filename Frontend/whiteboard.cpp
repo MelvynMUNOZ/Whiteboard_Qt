@@ -1,4 +1,5 @@
 #include "whiteboard.h"
+#include "ihmfrontend.h"
 #include <QObject>
 
 whiteboard::whiteboard(QWidget *parent)
@@ -6,7 +7,6 @@ whiteboard::whiteboard(QWidget *parent)
     ,imageWhiteboard(new QImage(QGuiApplication::primaryScreen()->geometry().size(),
                                    QImage::Format_ARGB32_Premultiplied))
 {
-    //setMinimumSize(800, 600);
     setWindowFlags(Qt::WindowMinimizeButtonHint);
     createWhiteboardLayout();
 
@@ -31,8 +31,8 @@ void whiteboard::createWhiteboardLayout(){
     listPseudo = new QListWidget(this);
     listPseudo->setFixedWidth(150);
 
-    pen = new QPen();
-    pen->setCapStyle(Qt::RoundCap);
+    //pen = new QPen();
+    // pen->setCapStyle(Qt::RoundCap);
 
     vBoxGeneral->addWidget(labelTitle);
 
@@ -67,16 +67,9 @@ void whiteboard::mouseMoveEvent(QMouseEvent *event){
         return;
     }
     pointEnd = event->pos();
-
-    if(writer){
-        pen->setBrush(QColor(0,0,255));
-        pen->setWidth(3);
-    }else{
-        pen->setBrush(QColor(255,255,255));
-        pen->setWidth(10);
-    }
-    painterWhiteboard->setPen(*pen);
+    painterWhiteboard->setPen(*globalDataClient.my_client_pen);
     painterWhiteboard->drawLine(pointBegin, pointEnd);
+    dataCanvasClients(pointBegin, pointEnd);
     pointBegin = pointEnd;
     update();
 }
@@ -87,8 +80,110 @@ void whiteboard::mouseReleaseEvent(QMouseEvent *event){
 
 void whiteboard::on_pushButtonPen_clicked(){
     writer = true;
+    globalDataClient.my_client_pen->setBrush(globalDataClient.my_client->getColor());
+    globalDataClient.my_client_pen->setWidth(3);
 }
 
 void whiteboard::on_pushButtonRubber_clicked(){
     writer = false;
+    globalDataClient.my_client_pen->setBrush(QColor(255,255,255));
+    globalDataClient.my_client_pen->setWidth(10);
 }
+
+void whiteboard::updateListClientInfos(int id_client){
+    //ajoute dans la listWidget les noms des clients
+    Client *clientPseudo = globalDataClient.client_infos->find(id_client).value();
+    QString name = clientPseudo->getName();
+    QColor color = clientPseudo->getColor();
+    QListWidgetItem *item = new QListWidgetItem(name);
+    item->setForeground(color);
+    listPseudo->addItem(item);
+}
+
+/******************* UDP **********************/
+
+void whiteboard::onUdpReadyRead(){
+    while (globalDataClient.udp_socket->hasPendingDatagrams())
+    {
+        QByteArray buffer;
+        buffer.resize(globalDataClient.udp_socket->pendingDatagramSize());
+
+        QHostAddress sender;
+        quint16 senderPort;
+
+        if (globalDataClient.udp_socket->readDatagram(buffer.data(), buffer.size(), &sender, &senderPort) > 0)
+        {
+            if (buffer.size() >= (qsizetype)UDP_FRAME_MIN_LEN)
+            {
+                processUdpFrame(sender, senderPort, buffer);
+            }
+        }
+    }
+}
+
+void whiteboard::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
+{
+    auto type = static_cast<MessageType>(data[0]);
+    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
+    auto payload = data.sliced(5);
+
+    qDebug() << ">>> UDP from" << sender.toString() << "port" << sender_port
+             << "| Type:" << type
+             << "| Id:" << id
+             << "| Payload:" << payload;
+
+    // qDebug() << ">> UDP from " << sender.toString() << "port" << sender_port
+    //          << "|" << data.toHex(' ');
+
+    switch (type)
+    {
+    case DATA_CANVAS_SYNC:
+        qDebug() << "DATA_CANVAS_SYNC received";
+        dataCanvasSync(payload);
+        break;
+
+    default:
+        break;
+    }
+}
+
+void whiteboard::dataCanvasClients(QPoint pointBegin, QPoint pointEnd){
+    QByteArray message;
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    stream << static_cast<quint8>(MessageType::DATA_CANVAS_CLIENT); // Type du message
+    stream << static_cast<quint32>(globalDataClient.my_client->getId());
+    stream << static_cast<int>(pointBegin.x());
+    stream << static_cast<int>(pointBegin.y());
+    stream << static_cast<int>(pointEnd.x());
+    stream << static_cast<int>(pointEnd.y());
+    stream << static_cast<int>(globalDataClient.my_client_pen->width());
+    message.append(globalDataClient.my_client_pen->color().name(QColor::HexRgb).toUtf8());
+    message.append('\n');
+
+    globalDataClient.udp_socket->writeDatagram(message, message.size(), globalDataClient.tcp_socket->peerAddress(), UDP_PORT);
+    globalDataClient.udp_socket->flush();
+}
+
+void whiteboard::dataCanvasSync(const QByteArray &payload){
+    int XBegin = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 3).data()));
+    int YBegin = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(4, 7).data()));
+    int XEnd = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(8, 11).data()));
+    int YEnd = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(12, 15).data()));
+    int penWidth = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(16,19).data()));
+    int colorStartIndex = payload.indexOf('#');
+    if (colorStartIndex == -1 || colorStartIndex + 7 > payload.size()) {
+        qWarning() << "Invalid color format in payload.";
+    }
+    QString colorHex = QString::fromUtf8(payload.mid(colorStartIndex, 7));
+
+    QPen *pen_client = new QPen();
+    pen_client->setCapStyle(Qt::RoundCap);
+    pen_client->setBrush(QColor(colorHex));
+    pen_client->setWidth(penWidth);
+
+    painterWhiteboard->setPen(*pen_client);
+    painterWhiteboard->drawLine(XBegin, YBegin, XEnd, YEnd);
+}
+

@@ -13,6 +13,7 @@
 #include <QImage>
 #include <QDesktopServices>
 #include <QPushButton>
+#include <QHostAddress>
 
 class whiteboard : public QWidget
 {
@@ -21,6 +22,7 @@ public:
     explicit whiteboard(QWidget *parent = nullptr);
 
     void createWhiteboardLayout();
+    void updateListClientInfos(int id_client);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -50,6 +52,14 @@ private:
 
     void on_pushButtonPen_clicked();
     void on_pushButtonRubber_clicked();
+
+    //UPD
+    void processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data);
+    void dataCanvasClients(QPoint pointBegin, QPoint pointEnd);
+    void dataCanvasSync(const QByteArray &payload);
+
+public slots:
+    void onUdpReadyRead();
 
 signals:
 };

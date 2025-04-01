@@ -12,11 +12,12 @@
 #include <QMainWindow>
 #include <QString>
 #include <QMessageBox>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QUdpSocket>
+#include <QtEndian>
 
 #include "whiteboard.h"
-
-#define TCP_PORT 12345
-#define UDP_PORT 12346
 
 class connection : public QWidget
 {
@@ -25,15 +26,6 @@ public:
     explicit connection(QWidget *parent = nullptr);
 
     void createConnectionLayout();
-
-    enum MessageType{
-        NONE,
-        SEND_CLIENT_NAME,
-        REQ_CLIENTS_INFOS,
-        UPDATE_CLIENTS_INFOS,
-        DATA_CANVAS_CLIENTS,
-        DATA_CANVAS_SYNC
-    };
 
 private:
 
@@ -51,16 +43,29 @@ private:
     QMessageBox *messageConnectionWAIT;
 
     bool isConnected = false;
-    uint8_t try_to_connect = 0;
-    static constexpr uint8_t timeout = 5;
+    //uint8_t try_to_connect = 0;
+    //static constexpr uint8_t timeout = 5;
 
     void on_pushButtonConnection_clicked();
     void messageBox_IP();
     void connectionCanva();
 
+    //Partie connexion au serveur
+    bool connectionToServer();
+
+    //TCP
+    void processTcpFrame(const QByteArray &data);
+    void registerClientMessage();
+    void requestAllClientInfoMessage();
+    int getClientInfos(QByteArray payload);
+    void registerUDPPortMessage();
+
+public slots:
+    void onTCPReadyRead();
 
 signals:
     void connectionSuccessful();
+    void getClientInfosSignal(int id_new_client);
 };
 
 #endif // CONNECTION_H
