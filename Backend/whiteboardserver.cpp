@@ -83,6 +83,8 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
             client->setName(QString::fromUtf8(payload));
             // Envoi ACK
             sendAckRegisterClient(client);
+            // Envoi a tous les autres clients qu'un nouveau client s'est connecte et enregistre
+            broadcastClientConnected(client);
             break;
 
         case REGISTER_UDP_PORT:
@@ -115,11 +117,12 @@ void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 
     // qInfo() << ">>> UDP from " << sender.toString() << "port" << sender_port
     //         << "|" << data.toHex(' ');
 
+    Client *client = m_clients[id];
+
     switch (type)
     {
     case DATA_CANVAS_CLIENT:
-        // TODO: Reception et enregistrement donnees Canvas, puis broadcast des nouvelles données a tous les clients
-        // broadcastDataCanvasSync(client, payload);
+        broadcastDataCanvasSync(client, payload);
         break;
 
     default:
@@ -267,8 +270,86 @@ void WhiteboardServer::broadcastDataCanvasSync(Client *client, const QByteArray 
         return;
     }
 
-    // TODO: envoi des données de canvas du client a tous les autres clients
-    (void)data;
+    int x_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(0, 3).data()));
+    int y_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(4, 7).data()));
+    int x_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(8, 11).data()));
+    int y_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(12, 15).data()));
+    int width = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(16, 19).data()));
+    QColor color = QColor(QString::fromUtf8(data.mid(20, 26)));
+
+    // Envoi des données de canvas du client recus a tous les autres clients
+    QByteArray message;
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    stream << static_cast<quint8>(WhiteboardServer::DATA_CANVAS_SYNC);  // Type du message
+    stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
+    message.append(data);
+    message.append('\n');
+
+    for (const auto &other_client : std::as_const(m_clients))
+    {
+        m_udp_socket->writeDatagram(message, client->getTcpSocket()->peerAddress(), client->getUdpPort());
+
+        qInfo() << "<<< UDP to" << other_client->getTcpSocket()->peerAddress().toString() << "port" << other_client->getTcpSocket()->peerPort()
+                << "| DATA_CANVAS_SYNC"
+                << "| Id:" << other_client->getId()
+                << "| Xbeg:" << x_beg
+                << "| Ybeg:" << y_beg
+                << "| Xend:" << x_end
+                << "| Yend:" << y_end
+                << "| Width:" << width
+                << "| Color:" << color.name(QColor::HexRgb);
+
+        // qInfo() << "<<< UDP to" << other_client->getTcpSocket()->peerAddress().toString() << "port" << other_client->getTcpSocket()->peerPort()
+        //         << "|" << message.toHex(' ');
+    }
+}
+
+void WhiteboardServer::broadcastClientConnected(Client *client)
+{
+    if (!client)
+    {
+        return;
+    }
+
+    /***** Encodage et envoi du message *****/
+
+    QByteArray message;
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    // Envoi a tous les clients sauf celui qui s'est connecte
+    for (const auto &other_client : std::as_const(m_clients))
+    {
+        stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
+        stream << static_cast<quint32>(other_client->getId()); // ID du client (4 bytes)
+        stream << static_cast<quint32>(client->getId()); // ID du client a envoyer (4 bytes)
+        message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
+        message.append(client->getName().toUtf8());  // Nom du client a envoyer
+        message.append('\n');
+
+        client->getTcpSocket()->write(message);
+        client->getTcpSocket()->flush();
+
+        if (other_client != client && other_client->getTcpSocket())
+        {
+            other_client->getTcpSocket()->write(message);
+            other_client->getTcpSocket()->flush();
+
+            qInfo() << "<<< TCP to" << other_client->getTcpSocket()->peerAddress().toString() << "port" << other_client->getTcpSocket()->peerPort()
+                    << "| CLIENT_INFOS"
+                    << "| Id:" << other_client->getId()
+                    << "| OId:" << client->getId()
+                    << "| Color:" << client->getColor().name(QColor::HexRgb)
+                    << "| Name:" << client->getName();
+
+            // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+            //         << "|" << message.toHex(' ');
+        }
+
+        message.clear();
+    }
 }
 
 void WhiteboardServer::broadcastClientDisconnected(Client *client)
@@ -290,19 +371,19 @@ void WhiteboardServer::broadcastClientDisconnected(Client *client)
     message.append('\n');
 
     // Envoi a tous les clients sauf celui qui se deconnecte
-    for (const auto &otherClient : std::as_const(m_clients))
+    for (const auto &other_client : std::as_const(m_clients))
     {
-        if (otherClient != client && otherClient->getTcpSocket())
+        if (other_client != client && other_client->getTcpSocket())
         {
-            otherClient->getTcpSocket()->write(message);
-            otherClient->getTcpSocket()->flush();
+            other_client->getTcpSocket()->write(message);
+            other_client->getTcpSocket()->flush();
 
             qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
                      << "| CLIENT_DISCONNECTED"
                      << "| Id:" << client->getId()
                      << "| Name:" << client->getName();
 
-            // qInfo() << "<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+            // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
             //         << "|" << message.toHex(' ');
         }
     }
@@ -396,8 +477,6 @@ void WhiteboardServer::onTcpNewConnection()
 
     // Envoi ACK
     sendAckConnect(client);
-
-    // TODO: broad
 }
 
 void WhiteboardServer::onTcpClientDisconnected()

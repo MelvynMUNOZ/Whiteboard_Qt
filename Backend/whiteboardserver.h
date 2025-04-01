@@ -118,6 +118,12 @@ protected:
     void broadcastDataCanvasSync(Client *client, const QByteArray &data);
 
     /**
+     * @brief Broadcasts a client connection event to all remaining clients.
+     * @param client Pointer to the client that connected.
+     */
+    void broadcastClientConnected(Client *client);
+
+    /**
      * @brief Broadcasts a client disconnection event to all remaining clients.
      * @param client Pointer to the client that disconnected.
      */
