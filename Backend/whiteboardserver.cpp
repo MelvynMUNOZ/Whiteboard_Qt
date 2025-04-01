@@ -63,7 +63,11 @@ void WhiteboardServer::start(quint16 tcp_port, quint16 udp_port)
 void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 {
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
-    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 5).data()));
+
+    quint32 idRaw;
+    memcpy(&idRaw, data.mid(1, 4).data(), 4);
+    int id = qFromBigEndian(idRaw);
+
     QByteArray payload = data.sliced(5).chopped(1);
 
     qInfo() << ">>> TCP from" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
@@ -106,7 +110,6 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
 {
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
-    // int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 5).data()));
     QByteArray payload = data.sliced(1).chopped(1);
 
     qInfo() << ">>> UDP from" << sender.toString() << "port" << sender_port
@@ -115,8 +118,6 @@ void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 
 
     // qInfo() << ">>> UDP from " << sender.toString() << "port" << sender_port
     //         << "|" << data.toHex(' ');
-
-    // Client *client = m_clients[id];
 
     switch (type)
     {
@@ -266,12 +267,27 @@ void WhiteboardServer::broadcastDataCanvasSync(const QByteArray &data)
 {
     /***** Decodage du message *****/
 
-    int x_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(0, 4).data()));
-    int y_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(4, 8).data()));
-    int x_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(8, 12).data()));
-    int y_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(12, 16).data()));
-    int width = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(16, 20).data()));
-    QColor color = QColor(QString::fromUtf8(data.mid(20, 27)));
+    quint32 x_beg_raw, y_beg_raw, x_end_raw, y_end_raw, width_raw;
+
+    // Lire les 4 octets pour chaque variable et les convertir en int (big endian)
+    memcpy(&x_beg_raw, data.mid(0, 4).data(), 4);
+    int x_beg = qFromBigEndian(x_beg_raw);
+
+    memcpy(&y_beg_raw, data.mid(4, 4).data(), 4);
+    int y_beg = qFromBigEndian(y_beg_raw);
+
+    memcpy(&x_end_raw, data.mid(8, 4).data(), 4);
+    int x_end = qFromBigEndian(x_end_raw);
+
+    memcpy(&y_end_raw, data.mid(12, 4).data(), 4);
+    int y_end = qFromBigEndian(y_end_raw);
+
+    memcpy(&width_raw, data.mid(16, 4).data(), 4);
+    int width = qFromBigEndian(width_raw);
+
+    // Lire le reste pour obtenir la couleur (en hex)
+    QString color_hex = QString::fromUtf8(data.mid(20, 7)); // 7 caracteres
+    QColor color(color_hex);
 
     /***** Encodage et envoi du message *****/
 
@@ -280,7 +296,6 @@ void WhiteboardServer::broadcastDataCanvasSync(const QByteArray &data)
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(WhiteboardServer::DATA_CANVAS_SYNC);  // Type du message
-    // stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
     message.append(data);
     message.append('\n');
 
@@ -316,18 +331,15 @@ void WhiteboardServer::broadcastClientConnected(Client *client)
     QDataStream stream(&message, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::BigEndian);
 
-    // Envoi a tous les clients sauf celui qui s'est connecte
+    // Envoi a tous les autres client qu'un client s'est connecte, sauf celui concerne
     for (const auto &other_client : std::as_const(m_clients))
     {
         stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
         stream << static_cast<quint32>(other_client->getId()); // ID du client (4 bytes)
-        stream << static_cast<quint32>(client->getId()); // ID du client a envoyer (4 bytes)
-        message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
-        message.append(client->getName().toUtf8());  // Nom du client a envoyer
+        stream << static_cast<quint32>(client->getId()); // ID du client qui s'est connecte (4 bytes)
+        message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client qui s'est connecte
+        message.append(client->getName().toUtf8());  // Nom du client qui s'est connecte
         message.append('\n');
-
-        client->getTcpSocket()->write(message);
-        client->getTcpSocket()->flush();
 
         if (other_client != client && other_client->getTcpSocket())
         {
