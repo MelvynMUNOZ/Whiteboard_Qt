@@ -1,3 +1,9 @@
+/**
+ * @file whiteboardserver.cpp
+ * @brief Implementation of the WhiteboardServer class.
+ * @author Raphael CAUSSE
+ */
+
 #include "whiteboardserver.h"
 
 #include <QNetworkInterface>
@@ -23,32 +29,32 @@ WhiteboardServer::~WhiteboardServer()
     m_udp_socket->deleteLater();
 }
 
-void WhiteboardServer::start()
+void WhiteboardServer::start(quint16 tcp_port, quint16 udp_port)
 {
     qInfo() << "Host Server IP address:" << getHostIpAddress();
 
     /***** TCP *****/
 
-    if (m_tcp_server->listen(QHostAddress::Any, TCP_PORT))
+    if (m_tcp_server->listen(QHostAddress::Any, tcp_port))
     {
-        qInfo() << "Started TCP server on port" << TCP_PORT;
+        qInfo() << "Started TCP server on port" << tcp_port;
     }
     else
     {
-        qCritical() << "Failed to start TCP server on port" << TCP_PORT;
+        qCritical() << "Failed to start TCP server on port" << tcp_port;
     }
 
     connect(m_tcp_server, &QTcpServer::newConnection, this, &WhiteboardServer::onTcpNewConnection);
 
     /***** UDP *****/
 
-    if (m_udp_socket->bind(QHostAddress::Any, UDP_PORT, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
+    if (m_udp_socket->bind(QHostAddress::Any, udp_port, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
     {
-        qInfo() << "Started UDP socket on port" << UDP_PORT;
+        qInfo() << "Started UDP socket on port" << udp_port;
     }
     else
     {
-        qCritical() << "Failed to start UDP socket on port" << UDP_PORT;
+        qCritical() << "Failed to start UDP socket on port" << udp_port;
     }
 
     connect(m_udp_socket, &QUdpSocket::readyRead, this, &WhiteboardServer::onUdpReadyRead);

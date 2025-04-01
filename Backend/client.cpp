@@ -1,3 +1,9 @@
+/**
+ * @file client.cpp
+ * @brief Implementation of the Client class.
+ * @author Raphael CAUSSE
+ */
+
 #include "client.h"
 
 Client::Client(int id, QTcpSocket *socket, QColor color)
