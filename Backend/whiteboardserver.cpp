@@ -25,7 +25,7 @@ WhiteboardServer::~WhiteboardServer()
 
 void WhiteboardServer::start()
 {
-    qInfo() << "Host IP address:" << getHostIpAddress();
+    qInfo() << "Host Server IP address:" << getHostIpAddress();
 
     /***** TCP *****/
 
@@ -65,24 +65,56 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
              << "| Id:" << id
              << "| Payload:" << payload;
 
-    // qDebug() << ">> TCP from " << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-    //          << "|" << data.toHex(' ');
+    // qDebug() << ">>> TCP from " << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+    //          << "|" << data.toStdString();
+
+    // S'assurer qu'on communique avec le client avec le meme id
+    if (id == client->getId())
+    {
+        switch (type)
+        {
+        case REGISTER_CLIENT:
+            client->setName(QString::fromUtf8(payload));
+            sendAckRegisterClient(client);
+            break;
+
+        case REGISTER_UDP_PORT:
+            client->setUdpPort(qFromBigEndian(payload.toUShort()));
+            sendAckRegisterUdpPort(client);
+            break;
+
+        case REQUEST_ALL_CLIENT_INFOS:
+            sendAllClientsInfos(client);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    // TEST
+    sendAllClientsInfos(client);
+}
+
+void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
+{
+    auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
+    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
+    QByteArray payload = data.sliced(5);
+
+    qDebug() << ">>> UDP from" << sender.toString() << "port" << sender_port
+             << "| Type:" << type
+             << "| Id:" << id
+             << "| Payload:" << payload;
+
+    // qDebug() << ">>> UDP from " << sender.toString() << "port" << sender_port
+    //          << "|" << data.toStdString();
 
     switch (type)
     {
-    case REGISTER_CLIENT:
-        client->setName(QString::fromUtf8(payload));
-        sendAckRegisterClient(client);
-        break;
-
-    case REGISTER_UDP_PORT:
-        client->setUdpPort(qFromBigEndian(payload.toUShort()));
-        sendAckRegisterUdpPort(client);
-        break;
-
-    case REQUEST_ALL_CLIENTS_INFOS:
-        // TODO: Envoi d'une réponse TCP SEND_CLIENTS_INFOS par client enregistré, avec comme données : id client, color (hex), nom
-        // broadcastClientsInfos();
+    case DATA_CANVAS_CLIENT:
+        // TODO: Reception et enregistrement donnees Canvas, puis broadcast des nouvelles données a tous les clients
+        // broadcastDataCanvasSync(client, payload);
         break;
 
     default:
@@ -90,29 +122,33 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
     }
 }
 
-void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
+void WhiteboardServer::sendAckConnect(Client *client)
 {
-    auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
-    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
-    auto payload = data.sliced(5);
-
-    qDebug() << ">>> UDP from" << sender.toString() << "port" << sender_port
-             << "| Type:" << type
-             << "| Id:" << id
-             << "| Payload:" << payload;
-
-    // qDebug() << ">> UDP from " << sender.toString() << "port" << sender_port
-    //          << "|" << data.toHex(' ');
-
-    switch (type)
+    if (!client)
     {
-    case DATA_CANVAS_CLIENT:
-        // TODO: Reception et enregistrement donnees Canvas, puis broadcast des nouvelles données a tous les clients
-        break;
-
-    default:
-        break;
+        return;
     }
+
+    /***** Encodage et envoi du message *****/
+
+    QByteArray message;
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    stream << static_cast<quint8>(WhiteboardServer::ACK_CONNECT);  // Type du message
+    stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
+    message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client en hex
+
+    client->getTcpSocket()->write(message);
+    client->getTcpSocket()->flush();
+
+    // qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
+    //          << "| ACK_CONNECT"
+    //          << "| Id:" << client->getId()
+    //          << "| Name:" << client.getName();
+
+    qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+             << "|" << message.toStdString();
 }
 
 void WhiteboardServer::sendAckRegisterClient(Client *client)
@@ -122,13 +158,15 @@ void WhiteboardServer::sendAckRegisterClient(Client *client)
         return;
     }
 
+    /***** Encodage et envoi du message *****/
+
     QByteArray message;
     QDataStream stream(&message, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::BigEndian);
 
-    stream << static_cast<quint8>(WhiteboardServer::ACK_REGISTER_UDP_PORT);  // Type du message
+    stream << static_cast<quint8>(WhiteboardServer::ACK_REGISTER_CLIENT);  // Type du message
     stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
-    message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client en hex
+    message.append(client->getName().toUtf8());  // La couleur du client en hex
 
     client->getTcpSocket()->write(message);
     client->getTcpSocket()->flush();
@@ -139,7 +177,7 @@ void WhiteboardServer::sendAckRegisterClient(Client *client)
     //          << "| Color:" << colorHex;
 
     qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-             << "|" << message.toHex(' ');
+             << "|" << message.toStdString();
 }
 
 void WhiteboardServer::sendAckRegisterUdpPort(Client *client)
@@ -148,6 +186,8 @@ void WhiteboardServer::sendAckRegisterUdpPort(Client *client)
     {
         return;
     }
+
+    /***** Encodage et envoi du message *****/
 
     QByteArray message;
     QDataStream stream(&message, QIODevice::WriteOnly);
@@ -166,7 +206,60 @@ void WhiteboardServer::sendAckRegisterUdpPort(Client *client)
     //          << "| UDP Port:" << client->getUdpPort();
 
     qDebug() << "<<< UDP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getUdpPort()
-             << "|" << message.toHex(' ');
+             << "|" << message.toStdString();
+}
+
+void WhiteboardServer::sendAllClientsInfos(Client *client)
+{
+    if (!client)
+    {
+        return;
+    }
+
+    /***** Encodage et envoi du message *****/
+
+    QByteArray message;
+    QDataStream stream(&message, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    // Envoi toutes les infos de tous les clients enregistres
+    for (const auto &other_client : std::as_const(m_clients))
+    {
+        if (other_client != client)
+        {
+            stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
+            stream << static_cast<quint32>(client->getId()); // ID du client (4 bytes)
+            stream << static_cast<quint32>(other_client->getId()); // ID du client a envoyer (4 bytes)
+            message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
+            message.append(client->getName().toUtf8());  // Nom du client a envoyer
+
+            client->getTcpSocket()->write(message);
+            client->getTcpSocket()->flush();
+
+            // qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress() << "port" << client->getTcpSocket()->peerPort()
+            //          << "| CLIENT_INFOS"
+            //          << "| Id:" << client->getId()
+            //          << "| OId:" << client->getId()
+            //          << "| Color:" << client.getColor().name(QColor::HexRgb)
+            //          << "| Name:" << client.getName();
+
+            qDebug() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
+                     << "|" << message.toStdString();
+        }
+
+        message.clear();
+    }
+}
+
+void WhiteboardServer::broadcastDataCanvasSync(Client *client, const QByteArray &data)
+{
+    if (!client)
+    {
+        return;
+    }
+
+    // TODO: envoi des données de canvas du client a tous les autres clients
+    (void)data;
 }
 
 void WhiteboardServer::broadcastClientDisconnected(Client *client)
@@ -176,15 +269,17 @@ void WhiteboardServer::broadcastClientDisconnected(Client *client)
         return;
     }
 
+    /***** Encodage et envoi du message *****/
+
     QByteArray message;
     QDataStream stream(&message, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(WhiteboardServer::CLIENT_DISCONNECTED); // Type du message
-    stream << static_cast<quint32>(client->getId());  // ID du client qui se déconnecte (4 bytes Big Endian)
+    stream << static_cast<quint32>(client->getId());  // ID du client qui se déconnecte (4 bytes)
     message.append(client->getName().toUtf8());  // Nom du client
 
-    // Envoi à tous les clients sauf celui qui se deconnecte
+    // Envoi a tous les clients sauf celui qui se deconnecte
     for (const auto &otherClient : std::as_const(m_clients))
     {
         if (otherClient != client && otherClient->getTcpSocket())
@@ -198,7 +293,7 @@ void WhiteboardServer::broadcastClientDisconnected(Client *client)
             //          << "| Name:" << client->getName();
 
             qDebug() << "<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-                     << "|" << message.toHex(' ');
+                     << "|" << message.toStdString();
         }
     }
 }
@@ -232,7 +327,7 @@ QColor WhiteboardServer::generateUniqueColor()
 {
     int hue = QRandomGenerator::global()->bounded(0, 360);  // Teinte (0-359°)
     int saturation = 200 + QRandomGenerator::global()->bounded(55); // Saturation haute (200-255)
-    int value = 200 + QRandomGenerator::global()->bounded(55); // Luminosité haute (200-255)
+    int value = 200 + QRandomGenerator::global()->bounded(55); // Luminosite haute (200-255)
 
     return QColor::fromHsv(hue, saturation, value);
 }
@@ -242,7 +337,7 @@ void WhiteboardServer::addColorToUsedList(const QColor &color)
     if (!isColorUsed(color)) {
         m_used_colors.append(color);
     } else {
-        qDebug() << "Color already used!";
+        qDebug() << "Color" << color.name(QColor::HexRgb) << "already used!";
     }
 }
 
@@ -256,7 +351,7 @@ void WhiteboardServer::removeUsedColor(const QColor &color)
     if (isColorUsed(color)) {
         m_used_colors.removeAll(color);
     } else {
-        qDebug() << "Color not found in used colors!";
+        qDebug() << "Color"  "not found in used colors!";
     }
 }
 
@@ -267,6 +362,11 @@ void WhiteboardServer::onTcpNewConnection()
     {
         return;
     }
+
+    connect(client_socket, &QTcpSocket::readyRead, this, &WhiteboardServer::onTcpReadyRead);
+    connect(client_socket, &QTcpSocket::disconnected, this, &WhiteboardServer::onTcpClientDisconnected);
+
+    /***** Creation nouveau client *****/
 
     int client_id = nextClientId++;
     QColor client_color = Qt::black;
@@ -280,10 +380,10 @@ void WhiteboardServer::onTcpNewConnection()
     m_clients[client_id] = client;
 
     qInfo() << "Client connected from" << client_socket->peerAddress().toString() << "port" << client_socket->peerPort()
-            << "| Id:" << client_id;
+            << "| Id:" << client_id
+            << "| Color:" << client_color.name(QColor::HexRgb);
 
-    connect(client_socket, &QTcpSocket::readyRead, this, &WhiteboardServer::onTcpReadyRead);
-    connect(client_socket, &QTcpSocket::disconnected, this, &WhiteboardServer::onTcpClientDisconnected);
+    sendAckConnect(client);
 }
 
 void WhiteboardServer::onTcpClientDisconnected()
@@ -293,12 +393,11 @@ void WhiteboardServer::onTcpClientDisconnected()
     {
         return;
     }
-
     Client *client = getClientByTcpSocket(client_socket);
     if (client)
     {
+        // Nettoyer les ressources et prevenir tous les autres clients de la deconnexion
         qInfo() << "Client disconnected | Id:" << client->getId();
-
         broadcastClientDisconnected(client);
 
         removeUsedColor(m_clients[client->getId()]->getColor());
@@ -313,13 +412,13 @@ void WhiteboardServer::onTcpReadyRead()
     {
         return;
     }
-
     Client *client = getClientByTcpSocket(client_socket);
     if (!client)
     {
         return;
     }
 
+    // Lecture des trames TCP
     while (client_socket->canReadLine())
     {
         QByteArray data = client_socket->readAll();
@@ -332,6 +431,7 @@ void WhiteboardServer::onTcpReadyRead()
 
 void WhiteboardServer::onUdpReadyRead()
 {
+    // Lecture des trames UDP
     while (m_udp_socket->hasPendingDatagrams())
     {
         QByteArray buffer;

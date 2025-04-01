@@ -32,14 +32,14 @@ class WhiteboardServer : public QObject
 
 public:
     enum MessageType {
-        ERROR = -1,
         NONE,
+        ACK_CONNECT,
         REGISTER_CLIENT,
         ACK_REGISTER_CLIENT,
         REGISTER_UDP_PORT,
         ACK_REGISTER_UDP_PORT,
-        REQUEST_ALL_CLIENTS_INFOS,
-        SEND_CLIENTS_INFOS,
+        REQUEST_ALL_CLIENT_INFOS,
+        CLIENT_INFOS,
         DATA_CANVAS_CLIENT,
         DATA_CANVAS_SYNC,
         CLIENT_DISCONNECTED,
@@ -55,13 +55,12 @@ protected:
     void processTcpFrame(Client *client, const QByteArray &data);
     void processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data);
 
+    void sendAckConnect(Client *client);
     void sendAckRegisterClient(Client *client);
     void sendAckRegisterUdpPort(Client *client);
-
-    void broadcastClientsInfos();
-    void broadcastDataCanvasSync();
+    void sendAllClientsInfos(Client *client);
+    void broadcastDataCanvasSync(Client *client, const QByteArray &data);
     void broadcastClientDisconnected(Client *client);
-
 
 private:
     static int nextClientId;
