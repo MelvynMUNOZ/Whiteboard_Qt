@@ -4,11 +4,10 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , Connexion(new connexion(this))
-    , Whiteboard(new whiteboard(this))
+    , Connection(new connection(this))
 {
     ui->setupUi(this);
-    setCentralWidget(Connexion);
+    setCentralWidget(Connection);
     //setCentralWidget(Whiteboard);
 }
 

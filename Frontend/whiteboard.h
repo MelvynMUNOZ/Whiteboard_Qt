@@ -45,7 +45,11 @@ private:
     QPoint pointEnd;
     bool enable;
 
-    bool writer; //pour faire la différence entre le crayon et la gomme
+    QPen *pen;
+    bool writer = true; //pour faire la différence entre le crayon et la gomme
+
+    void on_pushButtonPen_clicked();
+    void on_pushButtonRubber_clicked();
 
 signals:
 };

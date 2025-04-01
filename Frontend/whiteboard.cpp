@@ -1,4 +1,5 @@
 #include "whiteboard.h"
+#include <QObject>
 
 whiteboard::whiteboard(QWidget *parent)
     : QWidget{parent}
@@ -11,13 +12,16 @@ whiteboard::whiteboard(QWidget *parent)
 
     painterWhiteboard = new QPainter(imageWhiteboard);
     enable = false;
-    writer = true;
 
+    QObject::connect(pushButtonPen, &QPushButton::clicked, this, &whiteboard::on_pushButtonPen_clicked);
+    QObject::connect(pushButtonRubber, &QPushButton::clicked, this, &whiteboard::on_pushButtonRubber_clicked);
 }
 
 void whiteboard::createWhiteboardLayout(){
     vBoxGeneral = new QVBoxLayout(this);
-    labelTitle = new QLabel(this);
+    labelTitle = new QLabel("Canva", this);
+    labelTitle->setObjectName("labelTitle");
+    labelTitle->setAlignment(Qt::AlignCenter);
 
     hBoxChoices = new QHBoxLayout(); //pas de parent pour ne pas avoir de conflit
     pushButtonPen = new QPushButton("Pen", this);
@@ -26,6 +30,9 @@ void whiteboard::createWhiteboardLayout(){
     hBoxWhiteboard = new QHBoxLayout(); //pas de parent pour ne pas avoir de conflit
     listPseudo = new QListWidget(this);
     listPseudo->setFixedWidth(150);
+
+    pen = new QPen();
+    pen->setCapStyle(Qt::RoundCap);
 
     vBoxGeneral->addWidget(labelTitle);
 
@@ -61,7 +68,14 @@ void whiteboard::mouseMoveEvent(QMouseEvent *event){
     }
     pointEnd = event->pos();
 
-    painterWhiteboard->setPen(QPen(QColor(0,0,255)));
+    if(writer){
+        pen->setBrush(QColor(0,0,255));
+        pen->setWidth(3);
+    }else{
+        pen->setBrush(QColor(255,255,255));
+        pen->setWidth(10);
+    }
+    painterWhiteboard->setPen(*pen);
     painterWhiteboard->drawLine(pointBegin, pointEnd);
     pointBegin = pointEnd;
     update();
@@ -69,4 +83,12 @@ void whiteboard::mouseMoveEvent(QMouseEvent *event){
 
 void whiteboard::mouseReleaseEvent(QMouseEvent *event){
     enable = false;
+}
+
+void whiteboard::on_pushButtonPen_clicked(){
+    writer = true;
+}
+
+void whiteboard::on_pushButtonRubber_clicked(){
+    writer = false;
 }

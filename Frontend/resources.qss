@@ -1,0 +1,8 @@
+#pushButtonConnexion{
+    background-color :  #17a589;
+}
+
+#labelTitle{
+    font-size: 14px;
+    font-weight: bold;
+}
