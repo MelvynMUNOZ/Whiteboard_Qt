@@ -1,4 +1,3 @@
-#include "mainwindow.h"
 #include "connection.h"
 #include "whiteboard.h"
 #include "ihmfrontend.h"
