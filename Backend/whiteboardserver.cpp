@@ -63,7 +63,7 @@ void WhiteboardServer::start(quint16 tcp_port, quint16 udp_port)
 void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 {
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
-    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
+    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 5).data()));
     QByteArray payload = data.sliced(5).chopped(1);
 
     qInfo() << ">>> TCP from" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
@@ -106,23 +106,22 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
 void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
 {
     auto type = static_cast<WhiteboardServer::MessageType>(data[0]);
-    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
-    QByteArray payload = data.sliced(5).chopped(1);
+    // int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 5).data()));
+    QByteArray payload = data.sliced(1).chopped(1);
 
     qInfo() << ">>> UDP from" << sender.toString() << "port" << sender_port
              << "| Type:" << type
-             << "| Id:" << id
              << "| Payload:" << payload;
 
     // qInfo() << ">>> UDP from " << sender.toString() << "port" << sender_port
     //         << "|" << data.toHex(' ');
 
-    Client *client = m_clients[id];
+    // Client *client = m_clients[id];
 
     switch (type)
     {
     case DATA_CANVAS_CLIENT:
-        broadcastDataCanvasSync(client, payload);
+        broadcastDataCanvasSync(payload);
         break;
 
     default:
@@ -263,37 +262,35 @@ void WhiteboardServer::sendAllClientsInfos(Client *client)
     }
 }
 
-void WhiteboardServer::broadcastDataCanvasSync(Client *client, const QByteArray &data)
+void WhiteboardServer::broadcastDataCanvasSync(const QByteArray &data)
 {
-    if (!client)
-    {
-        return;
-    }
+    /***** Decodage du message *****/
 
-    int x_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(0, 3).data()));
-    int y_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(4, 7).data()));
-    int x_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(8, 11).data()));
-    int y_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(12, 15).data()));
-    int width = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(16, 19).data()));
-    QColor color = QColor(QString::fromUtf8(data.mid(20, 26)));
+    int x_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(0, 4).data()));
+    int y_beg = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(4, 8).data()));
+    int x_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(8, 12).data()));
+    int y_end = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(12, 16).data()));
+    int width = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(16, 20).data()));
+    QColor color = QColor(QString::fromUtf8(data.mid(20, 27)));
 
-    // Envoi des données de canvas du client recus a tous les autres clients
+    /***** Encodage et envoi du message *****/
+
     QByteArray message;
     QDataStream stream(&message, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(WhiteboardServer::DATA_CANVAS_SYNC);  // Type du message
-    stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
+    // stream << static_cast<quint32>(client->getId());  // ID du client (4 bytes)
     message.append(data);
     message.append('\n');
 
-    for (const auto &other_client : std::as_const(m_clients))
+    // Envoi des données de canvas du client recus a tous les autres clients
+    for (const auto &client : std::as_const(m_clients))
     {
         m_udp_socket->writeDatagram(message, client->getTcpSocket()->peerAddress(), client->getUdpPort());
 
-        qInfo() << "<<< UDP to" << other_client->getTcpSocket()->peerAddress().toString() << "port" << other_client->getTcpSocket()->peerPort()
+        qInfo() << "<<< UDP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
                 << "| DATA_CANVAS_SYNC"
-                << "| Id:" << other_client->getId()
                 << "| Xbeg:" << x_beg
                 << "| Ybeg:" << y_beg
                 << "| Xend:" << x_end

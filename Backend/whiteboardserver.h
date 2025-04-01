@@ -112,10 +112,9 @@ protected:
 
     /**
      * @brief Broadcasts canvas synchronization data to all clients.
-     * @param client Pointer to the client sending the data.
      * @param data The canvas data to be broadcasted.
      */
-    void broadcastDataCanvasSync(Client *client, const QByteArray &data);
+    void broadcastDataCanvasSync(const QByteArray &data);
 
     /**
      * @brief Broadcasts a client connection event to all remaining clients.
