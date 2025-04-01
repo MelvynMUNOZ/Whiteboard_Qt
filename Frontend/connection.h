@@ -51,7 +51,7 @@ private:
     void connectionCanva();
 
     //Partie connexion au serveur
-    bool connectionToServer();
+    void connectionToServer();
 
     //TCP
     void processTcpFrame(const QByteArray &data);
@@ -62,6 +62,8 @@ private:
 
 public slots:
     void onTCPReadyRead();
+    void onConnectedOK();
+    void onConnectedKO();
 
 signals:
     void connectionSuccessful();

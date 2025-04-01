@@ -86,7 +86,7 @@ void connection::on_pushButtonConnection_clicked(){
     }
 
     if(!checkPseudo && !checkIP && correctIP){
-        connection::connectionCanva();
+        connection::connectionToServer();
     }
 }
 
@@ -94,43 +94,9 @@ void connection::messageBox_IP(){
     messageConnectionKO->exec();
 }
 
-void connection::connectionCanva(){
-    //try_to_connect = 0;
-    messageConnectionWAIT->show();
-    isConnected = false;
-
-    QEventLoop loop;
-    QTimer timer;
-    //Attent la connexion au canva
-    // connect(&timer, &QTimer::timeout, [&](){
-    //     qDebug() << "Try to connect : " << try_to_connect;
-    //     try_to_connect++;
-    //     if(isConnected || try_to_connect > timeout){
-    //         qDebug() << "End : try to connect : " << try_to_connect;
-    //         loop.quit();
-    //         try_to_connect = 0;
-    //         emit connectionSuccessful();
-    //     }
-    // });
-    // timer.start(500);
-    // loop.exec();
-    if(connectionToServer()){
-        emit connectionSuccessful();
-    }
+void connection::onConnectedOK(){
     //Ferme le messageBox d'attente de connexion
     messageConnectionWAIT->hide();
-}
-
-bool connection::connectionToServer(){
-    //Creer la socket pour se connecter au serveur
-    globalDataClient.tcp_socket = new QTcpSocket();
-    globalDataClient.tcp_socket->connectToHost(lineEditIP->text(), TCP_PORT);;
-
-    if (!globalDataClient.tcp_socket->waitForConnected(5000)) {
-        qDebug() << "Échec de la connexion au serveur :" << globalDataClient.tcp_socket->errorString();
-        return false;
-    }
-
     qDebug() << "Connexion réussie au serveur" << lineEditIP->text() << "sur le port" << TCP_PORT;
     connect(globalDataClient.tcp_socket, &QTcpSocket::readyRead, this, &connection::onTCPReadyRead);
 
@@ -146,8 +112,27 @@ bool connection::connectionToServer(){
     }
 
     globalDataClient.client_infos = new QHash<int, Client*>();
+    emit connectionSuccessful();
+}
 
-    return true;
+void connection::onConnectedKO(){
+    qWarning() << "Échec de la connexion au serveur :" << globalDataClient.tcp_socket->errorString();
+    //Ferme le messageBox d'attente de connexion
+    messageConnectionWAIT->hide();
+}
+
+void connection::connectionToServer(){
+    messageConnectionWAIT->show();
+    //Creer la socket pour se connecter au serveur
+    globalDataClient.tcp_socket = new QTcpSocket();
+
+    connect(globalDataClient.tcp_socket, &QTcpSocket::connected, this, &connection::onConnectedOK);
+    connect(globalDataClient.tcp_socket, &QTcpSocket::errorOccurred, this, &connection::onConnectedKO);
+
+    //Si au bout de 5 secondes la connexion n'est pas etabli alors on leve un warning
+    QTimer::singleShot(5000, this, &connection::onConnectedKO);
+
+    globalDataClient.tcp_socket->connectToHost(lineEditIP->text(), TCP_PORT);
 }
 
 void connection::onTCPReadyRead(){
@@ -182,15 +167,12 @@ void connection::processTcpFrame(const QByteArray &data){
              << "| Id:" << id
              << "| Payload:" << payload;
 
-    // qDebug() << ">> TCP from " << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-    //          << "|" << data.toHex(' ');
-
     switch (type)
     {
     case ACK_CONNECT:
         globalDataClient.my_client = new Client(id, globalDataClient.tcp_socket, QColor(QString::fromUtf8(payload)));
         qDebug() << "id : " << globalDataClient.my_client->getId()
-                 << " ; color : " << globalDataClient.my_client->getColor().name();
+                 << "| color : " << globalDataClient.my_client->getColor().name();
         //Met la couleur associee au client
         globalDataClient.my_client_pen = new QPen();
         globalDataClient.my_client_pen->setCapStyle(Qt::RoundCap);
@@ -200,10 +182,6 @@ void connection::processTcpFrame(const QByteArray &data){
         break;
 
     case ACK_REGISTER_CLIENT:
-        // globalDataClient.my_client = new Client(id, globalDataClient.tcp_socket, QColor(QString::fromUtf8(payload)));
-        // qDebug() << "id : " << globalDataClient.my_client->getId()
-        //          << " ; color : " << globalDataClient.my_client->getColor().name();
-        // registerClientMessage();
         qDebug() << "ACK_REGISTER_CLIENT received";
         registerUDPPortMessage();
         break;
@@ -220,16 +198,6 @@ void connection::processTcpFrame(const QByteArray &data){
         emit getClientInfosSignal(id_new_client);
         break;
     }
-
-    // case REGISTER_UDP_PORT:
-    //     client->setUdpPort(qFromBigEndian(payload.toUShort()));
-    //     sendAckRegisterUdpPort(client);
-    //     break;
-
-    // case REQUEST_ALL_CLIENTS_INFOS:
-    //     // TODO: Envoi d'une réponse TCP SEND_CLIENTS_INFOS par client enregistré, avec comme données : id client, color (hex), nom
-    //     // broadcastClientsInfos();
-    //     break;
 
     default:
         break;
