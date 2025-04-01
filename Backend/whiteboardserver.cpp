@@ -72,7 +72,7 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
              << "| Payload:" << payload;
 
     // qInfo() << ">>> TCP from " << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-    //         << "|" << data.toStdString();
+    //         << "|" << data.toHex(' ');
 
     // S'assurer qu'on communique avec le client avec le meme id
     if (id == client->getId())
@@ -113,7 +113,7 @@ void WhiteboardServer::processUdpFrame(const QHostAddress sender, const quint16 
              << "| Payload:" << payload;
 
     // qInfo() << ">>> UDP from " << sender.toString() << "port" << sender_port
-    //         << "|" << data.toStdString();
+    //         << "|" << data.toHex(' ');
 
     switch (type)
     {
@@ -154,7 +154,7 @@ void WhiteboardServer::sendAckConnect(Client *client)
              << "| Color:" << client->getColor().name(QColor::HexRgb);
 
     // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-    //         << "|" << message.toStdString();
+    //         << "|" << message.toHex(' ');
 }
 
 void WhiteboardServer::sendAckRegisterClient(Client *client)
@@ -184,7 +184,7 @@ void WhiteboardServer::sendAckRegisterClient(Client *client)
              << "| Name:" << client->getName();
 
     // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-    //         << "|" << message.toStdString();
+    //         << "|" << message.toHex(' ');
 }
 
 void WhiteboardServer::sendAckRegisterUdpPort(Client *client)
@@ -214,7 +214,7 @@ void WhiteboardServer::sendAckRegisterUdpPort(Client *client)
              << "| UDP Port:" << client->getUdpPort();
 
     // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getUdpPort()
-    //         << "|" << message.toStdString();
+    //         << "|" << message.toHex(' ');
 }
 
 void WhiteboardServer::sendAllClientsInfos(Client *client)
@@ -238,8 +238,8 @@ void WhiteboardServer::sendAllClientsInfos(Client *client)
             stream << static_cast<quint8>(WhiteboardServer::CLIENT_INFOS); // Type du message
             stream << static_cast<quint32>(client->getId()); // ID du client (4 bytes)
             stream << static_cast<quint32>(other_client->getId()); // ID du client a envoyer (4 bytes)
-            message.append(client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
-            message.append(client->getName().toUtf8());  // Nom du client a envoyer
+            message.append(other_client->getColor().name(QColor::HexRgb).toUtf8());  // La couleur du client a envoyer
+            message.append(other_client->getName().toUtf8());  // Nom du client a envoyer
             message.append('\n');
 
             client->getTcpSocket()->write(message);
@@ -249,11 +249,11 @@ void WhiteboardServer::sendAllClientsInfos(Client *client)
                      << "| CLIENT_INFOS"
                      << "| Id:" << client->getId()
                      << "| OId:" << other_client->getId()
-                     << "| Color:" << client->getColor().name(QColor::HexRgb)
-                     << "| Name:" << client->getName();
+                     << "| Color:" << other_client->getColor().name(QColor::HexRgb)
+                     << "| Name:" << other_client->getName();
 
             // qInfo() << "<<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-            //         << "|" << message.toStdString();
+            //         << "|" << message.toHex(' ');
         }
 
         message.clear();
@@ -303,7 +303,7 @@ void WhiteboardServer::broadcastClientDisconnected(Client *client)
                      << "| Name:" << client->getName();
 
             // qInfo() << "<< TCP to" << client->getTcpSocket()->peerAddress().toString() << "port" << client->getTcpSocket()->peerPort()
-            //         << "|" << message.toStdString();
+            //         << "|" << message.toHex(' ');
         }
     }
 }
@@ -396,6 +396,8 @@ void WhiteboardServer::onTcpNewConnection()
 
     // Envoi ACK
     sendAckConnect(client);
+
+    // TODO: broad
 }
 
 void WhiteboardServer::onTcpClientDisconnected()
