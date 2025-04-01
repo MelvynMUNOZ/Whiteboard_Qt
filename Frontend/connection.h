@@ -17,8 +17,6 @@
 #include <QUdpSocket>
 #include <QtEndian>
 
-#include "whiteboard.h"
-
 class connection : public QWidget
 {
     Q_OBJECT

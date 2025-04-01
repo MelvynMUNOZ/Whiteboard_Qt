@@ -50,11 +50,13 @@ void connection::createConnectionLayout(){
 
     QObject::connect(pushButtonConnection, &QPushButton::clicked, this, &connection::on_pushButtonConnection_clicked);
 
+    //Creation messageBox pour l'erreur en cas de format d'adresse IP incorrecte
     messageConnectionKO = new QMessageBox();
     messageConnectionKO->setText("The IP adress have to be : X.X.X.X");
     messageConnectionKO->setIcon(QMessageBox::Critical);
     messageConnectionKO->setWindowTitle("Error");
 
+    //Creation messageBox pour l'attente pendant la connexion au serveur
     messageConnectionWAIT = new QMessageBox();
     messageConnectionWAIT->setText("Connection...");
     messageConnectionWAIT->setIcon(QMessageBox::Information);
@@ -69,6 +71,7 @@ void connection::on_pushButtonConnection_clicked(){
     bool checkPseudo = pseudo.isEmpty();
     bool checkIP = ip.isEmpty();
 
+    //Regex pour la verification du format de l'adresse IP
     QRegularExpression regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
     QRegularExpressionMatch matchIP = regex.match(ip);
     bool correctIP = matchIP.hasMatch();
@@ -97,18 +100,18 @@ void connection::messageBox_IP(){
 void connection::onConnectedOK(){
     //Ferme le messageBox d'attente de connexion
     messageConnectionWAIT->hide();
-    qDebug() << "Connexion réussie au serveur" << lineEditIP->text() << "sur le port" << TCP_PORT;
+    qInfo() << "Connexion réussie au serveur" << lineEditIP->text() << "sur le port" << TCP_PORT;
     connect(globalDataClient.tcp_socket, &QTcpSocket::readyRead, this, &connection::onTCPReadyRead);
 
     globalDataClient.udp_socket = new QUdpSocket();
     if (globalDataClient.udp_socket->bind(QHostAddress::Any, 0, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
     {
-        qInfo() << "Started UDP socket on port" << globalDataClient.udp_socket->localPort();
+        qInfo() << "Connexion socket UDP sur le port : " << globalDataClient.udp_socket->localPort();
         connect(globalDataClient.udp_socket, &QUdpSocket::readyRead, globalDataClient.whiteboardWidget, &whiteboard::onUdpReadyRead);
     }
     else
     {
-        qCritical() << "Failed to start UDP socket on port" << globalDataClient.udp_socket->localPort();
+        qCritical() << "Echec de connexion socket UDP sur le port : " << globalDataClient.udp_socket->localPort();
     }
 
     globalDataClient.client_infos = new QHash<int, Client*>();
@@ -136,6 +139,7 @@ void connection::connectionToServer(){
 }
 
 void connection::onTCPReadyRead(){
+    //Recupere la socket du serveur
     QTcpSocket *server_socket = qobject_cast<QTcpSocket *>(sender());
     if (!server_socket)
     {
@@ -143,6 +147,7 @@ void connection::onTCPReadyRead(){
         return;
     }
 
+    //Lecture de la trame ligne par ligne
     while (server_socket->canReadLine())
     {
         QByteArray data = server_socket->readLine();
@@ -167,30 +172,33 @@ void connection::processTcpFrame(const QByteArray &data){
              << "| Id:" << id
              << "| Payload:" << payload;
 
+    //Action differente en fonction de chaque type de message
     switch (type)
     {
+    //Recupere la couleur associe au client
     case ACK_CONNECT:
         globalDataClient.my_client = new Client(id, globalDataClient.tcp_socket, QColor(QString::fromUtf8(payload)));
         qDebug() << "id : " << globalDataClient.my_client->getId()
                  << "| color : " << globalDataClient.my_client->getColor().name();
-        //Met la couleur associee au client
+        //Met la couleur associee au client pour l'ecriture
         globalDataClient.my_client_pen = new QPen();
         globalDataClient.my_client_pen->setCapStyle(Qt::RoundCap);
         globalDataClient.my_client_pen->setBrush(globalDataClient.my_client->getColor());
         globalDataClient.my_client_pen->setWidth(3);
+
         registerClientMessage();
         break;
-
+    //Envoi du nom du client au serveur
     case ACK_REGISTER_CLIENT:
         qDebug() << "ACK_REGISTER_CLIENT received";
         registerUDPPortMessage();
         break;
-
+    //Demande au serveur de lui envoyer toutes les informations des clients connectes au serveur
     case ACK_REGISTER_UDP_PORT:
         qDebug() << "ACK_REGISTER_UDP_PORT received";
         requestAllClientInfoMessage();
         break;
-
+    //Recupere toutes les informations de tous les clients connectes au serveur
     case CLIENT_INFOS:
     {
         qDebug() << "CLIENT_INFOS received";
@@ -210,7 +218,7 @@ void connection::registerClientMessage(){
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(MessageType::REGISTER_CLIENT); // Type du message
-    stream << static_cast<quint32>(globalDataClient.my_client->getId());  // ID du client qui se déconnecte (4 bytes Big Endian)
+    stream << static_cast<quint32>(globalDataClient.my_client->getId());  // ID du client
     message.append(lineEditPseudo->text().toUtf8());  // Nom du client
     message.append('\n');
 
@@ -224,7 +232,7 @@ void connection::requestAllClientInfoMessage(){
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(MessageType::REQUEST_ALL_CLIENT_INFOS); // Type du message
-    stream << static_cast<quint32>(globalDataClient.my_client->getId());
+    stream << static_cast<quint32>(globalDataClient.my_client->getId()); // ID du client
     message.append('\n');
 
     globalDataClient.tcp_socket->write(message);
@@ -233,15 +241,14 @@ void connection::requestAllClientInfoMessage(){
 
 int connection::getClientInfos(QByteArray payload){
     qDebug() << "payload  : " << payload;
-    int id_client = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 4).data()));
+    int id_client = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 4).data())); // ID du client reçu
     int colorStartIndex = payload.indexOf('#');
     if (colorStartIndex == -1 || colorStartIndex + 7 > payload.size()) {
         qWarning() << "Invalid color format in payload.";
         return -1;
     }
-    QString colorHex = QString::fromUtf8(payload.mid(colorStartIndex, 7));
-    QString name = QString::fromUtf8(payload.mid(colorStartIndex+7));
-    qDebug() << "name = " << name;
+    QString colorHex = QString::fromUtf8(payload.mid(colorStartIndex, 7)); //Couleur du client reçu
+    QString name = QString::fromUtf8(payload.mid(colorStartIndex+7)); // Nom du client reçu
     Client *new_client = new Client(id_client, NULL, QColor(colorHex));
     new_client->setName(name);
     globalDataClient.client_infos->insert(id_client, new_client);
@@ -254,7 +261,7 @@ void connection::registerUDPPortMessage(){
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(MessageType::REGISTER_UDP_PORT); // Type du message
-    stream << static_cast<quint32>(globalDataClient.my_client->getId());
+    stream << static_cast<quint32>(globalDataClient.my_client->getId()); //ID du client
     stream << static_cast<quint16>(globalDataClient.udp_socket->localPort());  // Numero du port UDP
     message.append('\n');
 

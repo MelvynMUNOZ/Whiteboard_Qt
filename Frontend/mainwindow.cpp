@@ -7,8 +7,7 @@ MainWindow::MainWindow(QWidget *parent)
     , Connection(new connection(this))
 {
     ui->setupUi(this);
-    setCentralWidget(Connection);
-    //setCentralWidget(Whiteboard);
+    //setCentralWidget(Connection);
 }
 
 MainWindow::~MainWindow()

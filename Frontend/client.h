@@ -14,18 +14,15 @@ public:
     int getId() const;
     void setId(const int id);
     QTcpSocket *getTcpSocket() const;
-    //quint16 getUdpPort() const;
     QString getName() const;
     QColor getColor() const;
 
-    //void setUdpPort(const quint16 port);
     void setName(const QString &name);
     void setColor(const QColor &color);
 
 private:
     int m_id;
     QTcpSocket *m_tcp_socket;
-    //quint16 m_udp_port;
     QString m_name;
     QColor m_color;
 };

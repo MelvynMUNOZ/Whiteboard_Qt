@@ -19,20 +19,20 @@ whiteboard::whiteboard(QWidget *parent)
 
 void whiteboard::createWhiteboardLayout(){
     vBoxGeneral = new QVBoxLayout(this);
+    //Labels
     labelTitle = new QLabel("Canva", this);
     labelTitle->setObjectName("labelTitle");
     labelTitle->setAlignment(Qt::AlignCenter);
 
+    //PushButton
     hBoxChoices = new QHBoxLayout(); //pas de parent pour ne pas avoir de conflit
     pushButtonPen = new QPushButton("Pen", this);
     pushButtonRubber = new QPushButton("Rubber", this);
 
+    //ListPseudo
     hBoxWhiteboard = new QHBoxLayout(); //pas de parent pour ne pas avoir de conflit
     listPseudo = new QListWidget(this);
     listPseudo->setFixedWidth(150);
-
-    //pen = new QPen();
-    // pen->setCapStyle(Qt::RoundCap);
 
     vBoxGeneral->addWidget(labelTitle);
 
@@ -86,6 +86,7 @@ void whiteboard::on_pushButtonPen_clicked(){
 
 void whiteboard::on_pushButtonRubber_clicked(){
     writer = false;
+    //Met la couleur du crayon en blanc pour donner l'impression de gommer les traits colores
     globalDataClient.my_client_pen->setBrush(QColor(255,255,255));
     globalDataClient.my_client_pen->setWidth(10);
 }
@@ -124,7 +125,6 @@ void whiteboard::onUdpReadyRead(){
 void whiteboard::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
 {
     auto type = static_cast<MessageType>(data[0]);
-    //int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
     auto payload = data.sliced(1);
 
     if (!payload.isEmpty() && payload.endsWith('\n')) {
@@ -153,7 +153,6 @@ void whiteboard::dataCanvasClients(QPoint pointBegin, QPoint pointEnd){
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(MessageType::DATA_CANVAS_CLIENT); // Type du message
-    //stream << static_cast<quint32>(globalDataClient.my_client->getId());
     stream << static_cast<int>(pointBegin.x());
     stream << static_cast<int>(pointBegin.y());
     stream << static_cast<int>(pointEnd.x());
@@ -183,6 +182,7 @@ void whiteboard::dataCanvasSync(const QByteArray &payload){
     pen_client->setBrush(QColor(colorHex));
     pen_client->setWidth(penWidth);
 
+    //retrace les lignes des autres clients avec le meme crayon (taille, couleur)
     painterWhiteboard->setPen(*pen_client);
     painterWhiteboard->drawLine(XBegin, YBegin, XEnd, YEnd);
 }
