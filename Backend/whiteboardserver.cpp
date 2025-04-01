@@ -86,7 +86,7 @@ void WhiteboardServer::processTcpFrame(Client *client, const QByteArray &data)
             break;
 
         case REGISTER_UDP_PORT:
-            client->setUdpPort(qFromBigEndian(payload.toUShort()));
+            client->setUdpPort(qFromBigEndian(*reinterpret_cast<const quint16*>(payload.constData())));
             // Envoi ACK
             sendAckRegisterUdpPort(client);
             break;
