@@ -10,11 +10,11 @@
 
 #define TCP_PORT (12345)
 #define UDP_PORT (TCP_PORT + 1)
-#define UDP_PORT_CLIENT (54321)
 
 #define TCP_FRAME_MIN_LEN (sizeof(quint8) + sizeof(quint32))
 #define UDP_FRAME_MIN_LEN (sizeof(quint8) + sizeof(quint32))
 
+///<All type of messages sended and received
 enum MessageType {
     NONE,
     ACK_CONNECT,
@@ -29,6 +29,7 @@ enum MessageType {
     CLIENT_DISCONNECTED,
 };
 
+///<All general data for the IHM
 struct data_client{
     connection *connectionWidget;
     whiteboard *whiteboardWidget;

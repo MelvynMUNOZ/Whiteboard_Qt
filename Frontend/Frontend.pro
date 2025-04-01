@@ -12,18 +12,15 @@ SOURCES += \
     client.cpp \
     connection.cpp \
     main.cpp \
-    mainwindow.cpp \
     whiteboard.cpp
 
 HEADERS += \
     client.h \
     connection.h \
     ihmfrontend.h \
-    mainwindow.h \
     whiteboard.h
 
-FORMS += \
-    mainwindow.ui
+FORMS +=
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
