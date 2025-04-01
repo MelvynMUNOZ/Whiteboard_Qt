@@ -4,11 +4,15 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , Connection(new connection(this))
 {
     ui->setupUi(this);
+    //setCentralWidget(Connection);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
+
+
