@@ -1,20 +1,27 @@
 # Whiteboard_Qt
 
-Interactive Whiteboard GUI and Server in Qt.
+Interactive Whiteboard GUI and Server in Qt, using QtCreator with Qt6.
 
 
 ## FRONTEND
 
-GUI to login with a username to server, specifying the server IP address.
+Login to a whiteboard session on the server.
 
-Draw on the same canvas with other people.
+Enter your username and the server IP address.
 
+Draw on the same canvas with other people connected.
+
+To generate Backend Doxygen documentation, run the commands :
+```
+cd Frontend
+doxygen Doxyfile
+```
 
 ## BACKEND
 
-TCP Server on host machine, port 12345.
+TCP Server on host machine, default TCP port 12345.
 
-UDP Socket on host machine, port 12346.
+UDP Socket on host machine, default UDP port 12346.
 
 To generate Backend Doxygen documentation, run the commands :
 ```
