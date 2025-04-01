@@ -43,6 +43,12 @@ public:
      */
     void updateListClientInfos(int id_client);
 
+    /**
+     * @brief Delete the client from the list of connected clients' information.
+     * @param id_client Identifier of the client to be deleted.
+     */
+    void deleteClientListClientInfo(int id_client);
+
 protected:
     /**
      * @brief Event handler for rendering the whiteboard.

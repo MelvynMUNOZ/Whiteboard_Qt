@@ -2,6 +2,24 @@
 #include "ihmfrontend.h"
 #include <QObject>
 
+static bool itemExists(QListWidget *listWidget, const QString &text) {
+    for (int i = 0; i < listWidget->count(); ++i) {
+        if (listWidget->item(i)->text() == text) {
+            return true; // L'élément existe
+        }
+    }
+    return false; // L'élément n'existe pas
+}
+
+static QListWidgetItem *getItemByName(QListWidget *listWidget, const QString &text) {
+    for (int i = 0; i < listWidget->count(); ++i) {
+        if (listWidget->item(i)->text() == text) {
+            return listWidget->item(i); // L'élément existe
+        }
+    }
+    return nullptr; // L'élément n'existe pas
+}
+
 whiteboard::whiteboard(QWidget *parent)
     : QWidget{parent}
     ,imageWhiteboard(new QImage(QGuiApplication::primaryScreen()->geometry().size(),
@@ -10,6 +28,7 @@ whiteboard::whiteboard(QWidget *parent)
     setWindowFlags(Qt::WindowMinimizeButtonHint);
     createWhiteboardLayout();
 
+    imageWhiteboard->fill(Qt::white);
     painterWhiteboard = new QPainter(imageWhiteboard);
     enable = false;
 
@@ -41,6 +60,7 @@ void whiteboard::createWhiteboardLayout(){
     vBoxGeneral->addLayout(hBoxChoices);
 
     QWidget *whiteboardWidget = new QWidget(this);
+    whiteboardWidget->setObjectName("canvas");
     whiteboardWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     hBoxWhiteboard->addWidget(whiteboardWidget);
@@ -98,8 +118,25 @@ void whiteboard::updateListClientInfos(int id_client){
     QColor color = clientPseudo->getColor();
     QListWidgetItem *item = new QListWidgetItem(name);
     item->setForeground(color);
-    listPseudo->addItem(item);
+    if (!itemExists(listPseudo, name)) {
+        listPseudo->addItem(item);
+    }
 }
+
+void whiteboard::deleteClientListClientInfo(int id_client){
+    // Supprimer le client déconnecté de la liste
+    Client *client = globalDataClient.client_infos->find(id_client).value();
+    if (!client) {
+        qWarning() << "Client not found for ID:" << id_client;
+        return;
+    }
+
+    QListWidgetItem *item = getItemByName(listPseudo, client->getName());
+    if (item) {
+        delete listPseudo->takeItem(listPseudo->row(item));
+    }
+}
+
 
 /******************* UDP **********************/
 

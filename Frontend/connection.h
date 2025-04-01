@@ -91,7 +91,7 @@ private:
      * @param payload The data payload containing client info.
      * @return The ID of the new client.
      */
-    int getClientInfos(QByteArray payload);
+    int getClientInfos(QByteArray &payload);
 
     /**
      * @brief Sends a message to register the UDP port for communication.
@@ -125,6 +125,12 @@ signals:
      * @param id_new_client ID of the new client.
      */
     void getClientInfosSignal(int id_new_client);
+
+    /**
+     * @brief Signal emitted when a client disconnection is received.
+     * @param id ID of the disconnected client.
+     */
+    void clientDisconnectedSignal(int id);
 };
 
 #endif // CONNECTION_H

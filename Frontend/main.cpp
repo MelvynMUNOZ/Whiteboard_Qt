@@ -17,6 +17,7 @@ int main(int argc, char *argv[])
     a.setStyleSheet(style);
 
     QStackedWidget stackedWidget;
+    stackedWidget.setWindowTitle("Whiteboard");
     globalDataClient.connectionWidget = new connection(&stackedWidget);
     globalDataClient.whiteboardWidget = new whiteboard(&stackedWidget);
     stackedWidget.addWidget(globalDataClient.connectionWidget);
@@ -33,6 +34,12 @@ int main(int argc, char *argv[])
     //Mise en place de l'attente de signal correspondant a la reponse du message REQUEST_ALL_CLIENT_INFOS
     QObject::connect(globalDataClient.connectionWidget, &connection::getClientInfosSignal, [&](int id_client) {
         globalDataClient.whiteboardWidget->updateListClientInfos(id_client);
+    });
+
+    //Mise en place de l'attente de signal correspondant a la reponse du message REQUEST_ALL_CLIENT_INFOS
+    QObject::connect(globalDataClient.connectionWidget, &connection::clientDisconnectedSignal, [&](int id_client) {
+        qDebug() << "disconnected" << id_client;
+        globalDataClient.whiteboardWidget->deleteClientListClientInfo(id_client);
     });
 
     return a.exec();

@@ -26,7 +26,7 @@ enum MessageType {
     CLIENT_INFOS,
     DATA_CANVAS_CLIENT,
     DATA_CANVAS_SYNC,
-    CLIENT_DISCONNECTED,
+    CLIENT_DISCONNECTED = 100
 };
 
 ///<All general data for the IHM

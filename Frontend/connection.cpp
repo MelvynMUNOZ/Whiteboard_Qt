@@ -13,14 +13,14 @@ connection::connection(QWidget *parent)
 
 void connection::createConnectionLayout(){
     vBoxGeneral = new QVBoxLayout(this);
-    labelTitle = new QLabel("Connection to Canva", this);
+    labelTitle = new QLabel("Connection to Whiteboard", this);
     labelTitle->setObjectName("labelTitle");
     labelPseudo = new QLabel("Username : ", this);
     lineEditPseudo = new QLineEdit(this);
 
-    labelIP = new QLabel("Adresse IP : ", this);
+    labelIP = new QLabel("Server IP address : ", this);
     lineEditIP = new QLineEdit(this);
-    pushButtonConnection = new QPushButton("Connection", this);
+    pushButtonConnection = new QPushButton("Connect", this);
     pushButtonConnection->setObjectName("pushButtonConnection");
 
     //Alignements
@@ -132,9 +132,6 @@ void connection::connectionToServer(){
     connect(globalDataClient.tcp_socket, &QTcpSocket::connected, this, &connection::onConnectedOK);
     connect(globalDataClient.tcp_socket, &QTcpSocket::errorOccurred, this, &connection::onConnectedKO);
 
-    //Si au bout de 5 secondes la connexion n'est pas etabli alors on leve un warning
-    QTimer::singleShot(5000, this, &connection::onConnectedKO);
-
     globalDataClient.tcp_socket->connectToHost(lineEditIP->text(), TCP_PORT);
 }
 
@@ -160,12 +157,13 @@ void connection::onTCPReadyRead(){
 
 void connection::processTcpFrame(const QByteArray &data){
     auto type = static_cast<MessageType>(data[0]);
-    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
-    QByteArray payload = data.mid(5);
+    quint32 idRaw;
+    memcpy(&idRaw, data.mid(1, 4).data(), 4);
+    int id = qFromBigEndian(idRaw);
+    QByteArray payload = data.sliced(5).chopped(1);
 
-    if (!payload.isEmpty() && payload.endsWith('\n')) {
-        payload.chop(1);  // Retire le dernier caractère
-    }
+    qInfo() << ">>> TCP from" << globalDataClient.tcp_socket->peerAddress().toString() << "port" << TCP_PORT
+            << "|" << data.toHex(' ');
 
     qDebug() << ">>> TCP from" << globalDataClient.tcp_socket->peerAddress().toString() << "port" << TCP_PORT
              << "| Type:" << type
@@ -204,8 +202,13 @@ void connection::processTcpFrame(const QByteArray &data){
         qDebug() << "CLIENT_INFOS received";
         int id_new_client = getClientInfos(payload);
         emit getClientInfosSignal(id_new_client);
-        break;
     }
+        break;
+
+    case CLIENT_DISCONNECTED:
+        qDebug() << "CLIENT_DISCONNECTED received";
+        emit clientDisconnectedSignal(id);
+        break;
 
     default:
         break;
@@ -239,9 +242,11 @@ void connection::requestAllClientInfoMessage(){
     globalDataClient.tcp_socket->flush();
 }
 
-int connection::getClientInfos(QByteArray payload){
+int connection::getClientInfos(QByteArray &payload){
     qDebug() << "payload  : " << payload;
-    int id_client = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 4).data())); // ID du client reçu
+    quint32 idRaw;
+    memcpy(&idRaw, payload.mid(0, 4).data(), 4);
+    int id_client = qFromBigEndian(idRaw);
     int colorStartIndex = payload.indexOf('#');
     if (colorStartIndex == -1 || colorStartIndex + 7 > payload.size()) {
         qWarning() << "Invalid color format in payload.";
@@ -249,9 +254,12 @@ int connection::getClientInfos(QByteArray payload){
     }
     QString colorHex = QString::fromUtf8(payload.mid(colorStartIndex, 7)); //Couleur du client reçu
     QString name = QString::fromUtf8(payload.mid(colorStartIndex+7)); // Nom du client reçu
-    Client *new_client = new Client(id_client, NULL, QColor(colorHex));
-    new_client->setName(name);
-    globalDataClient.client_infos->insert(id_client, new_client);
+
+    if (!globalDataClient.client_infos->contains(id_client)) {
+        Client *new_client = new Client(id_client, NULL, QColor(colorHex));
+        new_client->setName(name);
+        globalDataClient.client_infos->insert(id_client, new_client);
+    }
     return id_client;
 }
 
