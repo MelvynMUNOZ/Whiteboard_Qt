@@ -135,15 +135,14 @@ bool connection::connectionToServer(){
     connect(globalDataClient.tcp_socket, &QTcpSocket::readyRead, this, &connection::onTCPReadyRead);
 
     globalDataClient.udp_socket = new QUdpSocket();
-    if (globalDataClient.udp_socket->bind(QHostAddress::Any, UDP_PORT_CLIENT, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
+    if (globalDataClient.udp_socket->bind(QHostAddress::Any, 0, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
     {
-        qInfo() << "Started UDP socket on port" << UDP_PORT_CLIENT;
-        qInfo() << "Started UDP socket on port" << static_cast<quint16>(globalDataClient.udp_socket->localPort());
+        qInfo() << "Started UDP socket on port" << globalDataClient.udp_socket->localPort();
         connect(globalDataClient.udp_socket, &QUdpSocket::readyRead, globalDataClient.whiteboardWidget, &whiteboard::onUdpReadyRead);
     }
     else
     {
-        qCritical() << "Failed to start UDP socket on port" << UDP_PORT_CLIENT;
+        qCritical() << "Failed to start UDP socket on port" << globalDataClient.udp_socket->localPort();
     }
 
     globalDataClient.client_infos = new QHash<int, Client*>();
@@ -266,7 +265,7 @@ void connection::requestAllClientInfoMessage(){
 
 int connection::getClientInfos(QByteArray payload){
     qDebug() << "payload  : " << payload;
-    int id_client = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 3).data()));
+    int id_client = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 4).data()));
     int colorStartIndex = payload.indexOf('#');
     if (colorStartIndex == -1 || colorStartIndex + 7 > payload.size()) {
         qWarning() << "Invalid color format in payload.";
@@ -278,17 +277,6 @@ int connection::getClientInfos(QByteArray payload){
     Client *new_client = new Client(id_client, NULL, QColor(colorHex));
     new_client->setName(name);
     globalDataClient.client_infos->insert(id_client, new_client);
-    //afficher QHash
-    // for (auto it = globalDataClient.client_infos->begin(); it != globalDataClient.client_infos->end(); ++it) {
-    //     int clientId = it.key();
-    //     Client* client = it.value();
-    //     if (client) {
-    //         qDebug() << "ID:" << clientId
-    //                  << "Nom:" << client->getName();
-    //     } else {
-    //         qDebug() << "ID:" << clientId << "-> Client NULL";
-    //     }
-    // }
     return id_client;
 }
 
@@ -299,7 +287,7 @@ void connection::registerUDPPortMessage(){
 
     stream << static_cast<quint8>(MessageType::REGISTER_UDP_PORT); // Type du message
     stream << static_cast<quint32>(globalDataClient.my_client->getId());
-    stream << static_cast<quint16>(UDP_PORT_CLIENT);  // Numero du port UDP
+    stream << static_cast<quint16>(globalDataClient.udp_socket->localPort());  // Numero du port UDP
     message.append('\n');
 
     globalDataClient.tcp_socket->write(message);

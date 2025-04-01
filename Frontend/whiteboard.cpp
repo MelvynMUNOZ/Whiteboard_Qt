@@ -124,16 +124,16 @@ void whiteboard::onUdpReadyRead(){
 void whiteboard::processUdpFrame(const QHostAddress sender, const quint16 sender_port, const QByteArray &data)
 {
     auto type = static_cast<MessageType>(data[0]);
-    int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
-    auto payload = data.sliced(5);
+    //int id = qFromBigEndian(*reinterpret_cast<const int*>(data.mid(1, 4).data()));
+    auto payload = data.sliced(1);
+
+    if (!payload.isEmpty() && payload.endsWith('\n')) {
+        payload.chop(1);  // Retire le dernier caractère
+    }
 
     qDebug() << ">>> UDP from" << sender.toString() << "port" << sender_port
              << "| Type:" << type
-             << "| Id:" << id
              << "| Payload:" << payload;
-
-    // qDebug() << ">> UDP from " << sender.toString() << "port" << sender_port
-    //          << "|" << data.toHex(' ');
 
     switch (type)
     {
@@ -153,12 +153,12 @@ void whiteboard::dataCanvasClients(QPoint pointBegin, QPoint pointEnd){
     stream.setByteOrder(QDataStream::BigEndian);
 
     stream << static_cast<quint8>(MessageType::DATA_CANVAS_CLIENT); // Type du message
-    stream << static_cast<quint32>(globalDataClient.my_client->getId());
+    //stream << static_cast<quint32>(globalDataClient.my_client->getId());
     stream << static_cast<int>(pointBegin.x());
     stream << static_cast<int>(pointBegin.y());
     stream << static_cast<int>(pointEnd.x());
     stream << static_cast<int>(pointEnd.y());
-    stream << static_cast<int>(globalDataClient.my_client_pen->width());
+    stream << static_cast<quint32>(globalDataClient.my_client_pen->width());
     message.append(globalDataClient.my_client_pen->color().name(QColor::HexRgb).toUtf8());
     message.append('\n');
 
@@ -167,11 +167,11 @@ void whiteboard::dataCanvasClients(QPoint pointBegin, QPoint pointEnd){
 }
 
 void whiteboard::dataCanvasSync(const QByteArray &payload){
-    int XBegin = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 3).data()));
-    int YBegin = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(4, 7).data()));
-    int XEnd = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(8, 11).data()));
-    int YEnd = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(12, 15).data()));
-    int penWidth = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(16,19).data()));
+    int XBegin = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(0, 4).data()));
+    int YBegin = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(4, 8).data()));
+    int XEnd = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(8, 12).data()));
+    int YEnd = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(12, 16).data()));
+    int penWidth = qFromBigEndian(*reinterpret_cast<const int*>(payload.mid(16,20).data()));
     int colorStartIndex = payload.indexOf('#');
     if (colorStartIndex == -1 || colorStartIndex + 7 > payload.size()) {
         qWarning() << "Invalid color format in payload.";
